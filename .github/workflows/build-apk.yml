@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - at120-125-strategic-reasoning-core-v2
 
 jobs:
   build:
