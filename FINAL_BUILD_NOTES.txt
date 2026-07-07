@@ -1,0 +1,5 @@
+AT44_45 Phase 4 final stable build.
+
+This build closes Phase 4 by freezing the world/context/behavior/policy Kotlin runtime API.
+It remains telemetry-only and keeps the native C++ core at 7.1.
+Use this as the Phase 4 final baseline after cloud build passes.

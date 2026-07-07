@@ -1,0 +1,7 @@
+AT60_SECURITY_PRIVACY baseline was passed and carried forward into AT61_70_SECURITY_PERFORMANCE_BATCH.
+
+[OK] PrivacyGuard retained
+[OK] AuditTrail retained
+[OK] PermissionBoundary retained
+[OK] DataRetention retained
+[OK] SecurityPrivacyState retained

@@ -1,0 +1,30 @@
+AT120_125 Strategic Reasoning Core
+
+Base: AT113_115_UI_HARD_LOCK
+Scope: Core AI reasoning only. UI/HUD shell stays locked unless build/runtime breaks.
+
+Added:
+- StrategicStateModel.kt
+- StrategicIntentEngine.kt
+- SkillBoundary.kt
+- PlannerCandidateGenerator.kt
+- StrategicCostModel.kt
+- PlanExplanation.kt
+- StrategicReasoningCore.kt
+- StrategicReasoningLock.kt
+
+Behavior:
+- Converts observer/context/trust/risk into PhysicsExperienceState.
+- Selects strategic intent.
+- Generates flexible plan candidates.
+- Scores plans with a conservative cost model.
+- Explains the chosen plan.
+- Exposes skill cards as proposal-only / approval-required / forbidden.
+
+Safety:
+- No action execution.
+- No tap/click automation.
+- No external export.
+- Telemetry-only remains TRUE.
+- Auto-control remains FALSE.
+- C++ core unchanged.
