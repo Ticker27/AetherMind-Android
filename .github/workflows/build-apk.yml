@@ -1,0 +1,141 @@
+name: AT120-125 Strategic Reasoning APK Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build AT120-125 APK on GitHub Cloud
+    runs-on: ubuntu-latest
+
+    env:
+      ANDROID_COMPILE_SDK: 35
+      ANDROID_BUILD_TOOLS: 35.0.0
+      ANDROID_NDK_VERSION: 26.3.11579264
+      ANDROID_CMAKE_VERSION: 3.22.1
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Show project layout
+        run: |
+          pwd
+          ls -la
+          find . -maxdepth 5 -name "build.gradle*" -type f -print
+          find . -path "*android_bridge/cpp/CMakeLists.txt" -type f -print
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle 8.10.2
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.10.2
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK, NDK, and CMake
+        run: |
+          sdkmanager "platforms;android-${ANDROID_COMPILE_SDK}"
+          sdkmanager "build-tools;${ANDROID_BUILD_TOOLS}"
+          sdkmanager "ndk;${ANDROID_NDK_VERSION}"
+          sdkmanager "cmake;${ANDROID_CMAKE_VERSION}"
+          yes | sdkmanager --licenses
+
+      - name: Validate source layout
+        run: |
+          test -f settings.gradle.kts
+          test -f build.gradle.kts
+          test -f app/build.gradle.kts
+          test -f AetherMindCore/android_bridge/cpp/CMakeLists.txt
+          test -f BOT_LABEL.txt
+          test -f CLOUD_GITHUB_HANDOFF.txt
+          test -f app/src/main/java/com/aether/renderer/AetherRuntimeBus.kt
+          test -f app/src/main/java/com/aether/renderer/MainActivity.kt
+          test -f app/src/main/java/com/aether/renderer/AetherOverlayService.kt
+          test -f app/src/main/java/com/aether/renderer/accessibility/AccessibilityStateMapper.kt
+          test -f app/src/main/java/com/aether/renderer/FinalManifest.kt
+          test -f app/src/main/java/com/aether/renderer/BaselineVerifier.kt
+          test -f app/src/main/java/com/aether/renderer/ReleaseReviewResolution.kt
+          test -f app/src/main/java/com/aether/renderer/TermuxTestHarness.kt
+          test -f app/src/main/java/com/aether/renderer/Phase10ExternalTestLock.kt
+          test -f app/src/main/java/com/aether/renderer/UiReadability.kt
+          test -f app/src/main/java/com/aether/renderer/DashboardOverlayGate.kt
+          test -f app/src/main/java/com/aether/renderer/StrategicStateModel.kt
+          test -f app/src/main/java/com/aether/renderer/StrategicIntentEngine.kt
+          test -f app/src/main/java/com/aether/renderer/SkillBoundary.kt
+          test -f app/src/main/java/com/aether/renderer/PlannerCandidateGenerator.kt
+          test -f app/src/main/java/com/aether/renderer/StrategicCostModel.kt
+          test -f app/src/main/java/com/aether/renderer/PlanExplanation.kt
+          test -f app/src/main/java/com/aether/renderer/StrategicReasoningCore.kt
+          test -f app/src/main/java/com/aether/renderer/StrategicReasoningLock.kt
+          grep -q "strategicReasoningFlow" app/src/main/java/com/aether/renderer/AetherRuntimeBus.kt
+          grep -q "ACTION_EXECUTION_ENABLED = false" app/src/main/java/com/aether/renderer/StrategicReasoningLock.kt
+          grep -q "dashboardOverlayGateFlow" app/src/main/java/com/aether/renderer/AetherRuntimeBus.kt
+          grep -q "TELEMETRY_ONLY" BOT_LABEL.txt
+          grep -q "AUTO_CONTROL_ENABLED: FALSE" BOT_LABEL.txt
+          grep -q "RAW_UI_TEXT_STORED: FALSE" BOT_LABEL.txt
+          grep -q "EXTERNAL_EXPORT_ALLOWED: FALSE" BOT_LABEL.txt
+          grep -q "versionCode = 1250" app/build.gradle.kts
+          grep -q "versionName = \"11.5.0\"" app/build.gradle.kts
+
+      - name: Run QA Static Checks
+        run: |
+          if [ -f qa/run_all_qa_checks.sh ]; then
+            sh qa/run_all_qa_checks.sh
+          else
+            echo "WARN: qa/run_all_qa_checks.sh missing; source layout validation already passed"
+          fi
+
+      - name: Build Debug APK
+        run: gradle clean :app:assembleDebug --stacktrace --info
+
+      - name: Build Release APK
+        run: gradle :app:assembleRelease --stacktrace --info
+
+      - name: Check JNI symbols
+        run: |
+          SO_FILE=$(find app/build -path "*arm64-v8a/libaether_jni.so" | head -n 1)
+          if [ -z "$SO_FILE" ]; then
+            echo "ERROR: arm64-v8a libaether_jni.so not found"
+            exit 1
+          fi
+          echo "Checking JNI symbols in: $SO_FILE"
+          NM="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm"
+          "$NM" -D "$SO_FILE" | grep Java_com_aether_renderer_AetherIntegrationLoop_nativeRunFrame
+          "$NM" -D "$SO_FILE" | grep Java_com_aether_renderer_AetherIntegrationLoop_nativeOnKeyEvent
+          "$NM" -D "$SO_FILE" | grep Java_com_aether_renderer_AetherIntegrationLoop_nativeOnTouchEvent
+          "$NM" -D "$SO_FILE" | grep Java_com_aether_renderer_AetherIntegrationLoop_nativeHudVisible
+          "$NM" -D "$SO_FILE" | grep Java_com_aether_renderer_AetherIntegrationLoop_nativeAiActive
+          "$NM" -D "$SO_FILE" | grep Java_com_aether_renderer_AetherIntegrationLoop_nativeLatestHudIntent
+          "$NM" -D "$SO_FILE" | grep Java_com_aether_renderer_NativeTrajectoryBridge_nativeStateSize
+
+      - name: Rename APK outputs
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/*.apk dist/AT125_reasoning_debug.apk
+          if ls app/build/outputs/apk/release/*.apk >/dev/null 2>&1; then
+            cp app/build/outputs/apk/release/*.apk dist/AT125_reasoning_release.apk
+          fi
+
+      - name: Upload Debug APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AT125_reasoning_debug
+          path: dist/AT125_reasoning_debug.apk
+
+      - name: Upload Release APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AT125_reasoning_release
+          path: dist/AT125_reasoning_release.apk

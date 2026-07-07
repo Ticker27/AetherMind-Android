@@ -1,0 +1,37 @@
+AT106_110 FINAL TERMUX CHECKS
+[AT110] static checks
+OK settings.gradle.kts
+OK build.gradle.kts
+OK app/build.gradle.kts
+OK BOT_LABEL.txt
+OK BUILD_NOTES.txt
+OK FINAL_TERMUX_TEST_GUIDE.md
+OK PHASE10_EXTERNAL_TEST_STATUS.txt
+OK RELEASE_REVIEW_RESOLUTION.txt
+OK app/src/main/java/com/aether/renderer/FinalManifest.kt
+OK app/src/main/java/com/aether/renderer/BaselineVerifier.kt
+OK app/src/main/java/com/aether/renderer/ReleaseReviewResolution.kt
+OK app/src/main/java/com/aether/renderer/TermuxTestHarness.kt
+OK app/src/main/java/com/aether/renderer/ArtifactCleaner.kt
+OK app/src/main/java/com/aether/renderer/Phase10ExternalTestLock.kt
+OK AetherMindCore/android_bridge/cpp/CMakeLists.txt
+STATIC_CHECKS_PASS
+[AT110] privacy checks
+WARN possible raw/export token found; review manually
+PRIVACY_CHECKS_PASS
+[AT110] QA checks
+QA static checks
+QA static checks PASS
+QA privacy checks
+QA privacy checks PASS
+QA layout checks
+QA layout checks PASS
+QA phase lock checks
+QA phase lock checks PASS
+ALL QA CHECKS PASS
+QA_CHECKS_PASS
+[AT110] local manifest
+WROTE TERMUX_LOCAL_MANIFEST.sha256
+[AT110] optional Android build
+SKIP gradle not found
+AT110_TERMUX_CHECKS_COMPLETE

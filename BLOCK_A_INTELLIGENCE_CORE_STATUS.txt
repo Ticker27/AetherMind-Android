@@ -1,0 +1,13 @@
+BLOCK_A_INTELLIGENCE_CORE_STATUS
+
+BLOCK A: PHASE 1-5 INTELLIGENCE CORE
+STATUS: COMPLETE_BASELINE
+
+Phase 1 Foundation: complete
+Phase 2 Runtime State Layer: complete baseline
+Phase 3 Decision/Safety/Memory: frozen
+Phase 4 World/Context/Behavior: frozen
+Phase 5 Learning/Trust/Feedback: frozen
+
+Next block:
+Phase 6-10 Production Hardening
