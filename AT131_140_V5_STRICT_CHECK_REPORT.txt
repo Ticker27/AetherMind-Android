@@ -1,0 +1,20 @@
+AT131_140 FINAL STABILITY LOCK v5 STRICT CHECK
+
+settings.gradle.kts: PASS
+build.gradle.kts: PASS
+app/build.gradle.kts: PASS
+AndroidManifest.xml: PASS
+workflow: PASS
+CMakeLists: PASS
+BOT_LABEL label: PASS
+BOT_LABEL version: PASS
+Gradle version: PASS
+FinalManifest identity: PASS
+APK names: PASS
+runtime legacy constants absent: PASS
+AUTO_CONTROL false: PASS
+EXECUTION false: PASS
+SKILL propose only: PASS
+forbidden marker absent: PASS
+
+RESULT: PASS

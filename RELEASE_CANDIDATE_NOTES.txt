@@ -1,0 +1,7 @@
+Release Candidate Notes
+
+APK outputs:
+- AT105_release_debug.apk
+- AT105_release_release.apk
+
+Use this source zip as the single source root. Do not merge with older patch bundles.

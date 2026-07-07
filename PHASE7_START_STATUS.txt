@@ -1,0 +1,9 @@
+PHASE 7 PERFORMANCE & RESOURCE CONTROL: STARTED
+
+AT66 Runtime Security Budget: included
+AT67 Privacy Resilience: included through security lock and boundary v2
+AT68 Resource Limiter: included through runtime budget and power clamp
+AT69 Frame Cost Prep: included through runtime budget metrics
+AT70 Runtime Budget: included
+
+Native C++ core remains unchanged.

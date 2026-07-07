@@ -1,0 +1,10 @@
+AT90 Regression Tests: ADDED
+AT91 Scenario Tests: ADDED
+AT92 Build Matrix: ADDED
+AT93 Crash Diagnostics: ADDED
+AT94 QA Lock: ADDED
+AT95 Phase9 Stable: ADDED
+Native Core: UNCHANGED
+Telemetry Only: TRUE
+Auto Control: FALSE
+Raw UI Text Exported: FALSE

@@ -1,0 +1,14 @@
+Release Review Resolution
+
+Canonical source line:
+- AT100_105_RELEASE_LOCK
+
+Archive/evidence line:
+- AetherMind_FINAL_KEEP_ARCHIVE.zip may be kept as evidence only.
+- Do not merge archive files as baseline.
+
+Final external test package:
+- AT106_110_FINAL_TERMUX_LOCK
+
+Reason:
+- Current AT line has synchronized labels, versions, workflow, QA, production lock, and Termux test harness.

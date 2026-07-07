@@ -1,0 +1,12 @@
+PHASE5_LEARNING_BATCH_STATUS
+
+CURRENT_LABEL: AT54_55_PHASE5_LOCK
+APP_VERSION: 5.5.0
+VERSION_CODE: 550
+STATUS: SUPERSEDED_AND_LOCKED
+
+Historical source:
+AT51_53_LEARNING_BATCH introduced Learning Memory, Trust Model, and Feedback Policy.
+
+Current package:
+AT54_55_PHASE5_LOCK freezes the Phase 5 learning APIs and closes Block A.
