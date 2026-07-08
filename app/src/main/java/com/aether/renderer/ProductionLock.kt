@@ -9,7 +9,7 @@ data class ProductionLockState(
     val releaseLabel: String = "AT131_140_FINAL_STABILITY_LOCK"
 ) {
     val badge: String
-        get() = if (productionLocked) "PROD_LOCK" else "PROD_OPEN"
+        get() = if (productionLocked) "PROD_LOCK_${FinalManifest.LABEL}" else "PROD_OPEN"
 
     val compactLine: String
         get() = "$badge telemetry=$telemetryOnly auto=$autoControlEnabled raw=$rawUiTextExported"

@@ -4,7 +4,7 @@ data class RuntimeMonitoringState(
     val active: Boolean = true,
     val frameCount: Long = 0L,
     val budgetBadge: String = "BUDGET_OK",
-    val productionBadge: String = "PROD_LOCK",
+    val productionBadge: String = "PROD_LOCK_${FinalManifest.LABEL}",
     val health: String = "HEALTH_OK"
 ) {
     val compactLine: String
