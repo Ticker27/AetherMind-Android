@@ -1,0 +1,14 @@
+AetherMind AT131-140 Final Stability Lock
+
+LABEL: AT131_140_FINAL_STABILITY_LOCK
+APP_VERSION: 14.0.0
+VERSION_CODE: 1400
+PACKAGE_NAME: com.aether.renderer
+CORE_VERSION: 7.1
+TYPE: FULL_PROJECT_ZIP
+ROOT_PREFIX: NONE
+
+Runtime identity is synchronized through FinalManifest and runtime-visible status/header surfaces.
+Skill system remains proposal-only.
+No tap/click/swipe/execute automation is enabled.
+No permission or C++ core changes are introduced by this lock.
