@@ -1,0 +1,11 @@
+AT51_53 checklist
+
+[OK] LearningMemory.kt added
+[OK] TrustModel.kt added
+[OK] FeedbackPolicy.kt added
+[OK] RuntimeDecision has memory/trust/feedback fields
+[OK] RuntimeBus has learningMemoryFlow/trustModelFlow/feedbackPolicyFlow
+[OK] HUD and dashboard display trust/feedback state
+[OK] Accessibility telemetry remains telemetry-only
+[OK] Native C++ core unchanged
+[OK] Auto-control remains disabled

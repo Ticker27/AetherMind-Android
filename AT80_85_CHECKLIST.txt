@@ -1,0 +1,13 @@
+AT80_85_CHECKLIST
+[OK] ExplainableUx.kt
+[OK] UserControlPanel.kt
+[OK] ProfileEditor.kt
+[OK] DebugTimeline.kt
+[OK] UserFeedbackSystem.kt
+[OK] Phase8Stable.kt
+[OK] Dashboard has explain/control/profile/timeline/feedback status
+[OK] UI has reset/freeze/copy sanitized/feedback buttons
+[OK] HUD explains safety/privacy/policy
+[OK] No C++ core change
+[OK] Telemetry-only remains true
+[OK] Auto-control remains false

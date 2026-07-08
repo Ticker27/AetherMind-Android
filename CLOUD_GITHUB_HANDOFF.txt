@@ -1,0 +1,16 @@
+AT120_125_STRATEGIC_REASONING_CORE handoff
+
+Upload this zip as the repository root. It has no prefix folder.
+
+Build workflow:
+.github/workflows/build-apk.yml
+
+Expected APK outputs:
+- AT125_reasoning_debug.apk
+- AT125_reasoning_release.apk
+
+Important:
+- This is the Core AI branch.
+- Do not reopen UI/HUD unless build/runtime breaks.
+- No action execution.
+- Telemetry-only remains true.

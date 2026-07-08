@@ -1,0 +1,11 @@
+[OK] Full source zip
+[OK] No root prefix folder
+[OK] App version 7.0.0
+[OK] Version code 700
+[OK] AT70 APK output names
+[OK] Kotlin runtime only
+[OK] No C++ core changes
+[OK] Telemetry-only remains true
+[OK] Auto-control remains false
+[OK] Raw UI text storage disabled
+[OK] External export disabled
