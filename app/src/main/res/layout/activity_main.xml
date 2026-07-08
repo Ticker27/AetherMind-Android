@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#121212"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingLeft="16dp"
+        android:paddingTop="20dp"
+        android:paddingRight="16dp"
+        android:paddingBottom="16dp">
+
+        <TextView android:id="@+id/tvCoreStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:text="Aether Core: READY" android:textColor="#00FF00" android:textSize="18sp" android:textStyle="bold" />
+        <TextView android:id="@+id/tvAbiStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:text="ABI: 64 bytes" android:textColor="#FFFFFF" android:textSize="14sp" />
+        <TextView android:id="@+id/tvOverlayStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:text="Overlay: UNKNOWN" android:textColor="#FFFFFF" android:textSize="14sp" />
+        <TextView android:id="@+id/tvAccessibilityStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:text="Accessibility: UNKNOWN" android:textColor="#FFFFFF" android:textSize="14sp" />
+
+        <TextView android:id="@+id/tvTargetAppStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:ellipsize="end" android:maxLines="1" android:text="Target: N/A" android:textColor="#80CBC4" android:textSize="13sp" />
+        <TextView android:id="@+id/tvSceneStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:text="Context: UNKNOWN" android:textColor="#B2DFDB" android:textSize="13sp" />
+        <TextView android:id="@+id/tvLearningStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:text="Learning: COLD" android:textColor="#C5CAE9" android:textSize="13sp" />
+        <TextView android:id="@+id/tvTrustStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:text="Trust: LOW" android:textColor="#D1C4E9" android:textSize="13sp" />
+        <TextView android:id="@+id/tvFeedbackStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:text="Feedback: READY" android:textColor="#FFE0B2" android:textSize="13sp" />
+        <TextView android:id="@+id/tvSecurityStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:text="Security: OK" android:textColor="#FFCCBC" android:textSize="13sp" />
+        <TextView android:id="@+id/tvAuditStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:text="Audit: session-only" android:textColor="#F8BBD0" android:textSize="13sp" />
+        <TextView android:id="@+id/tvPerformanceStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:text="Budget: NORMAL" android:textColor="#DCEDC8" android:textSize="13sp" />
+        <TextView android:id="@+id/tvExplainStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:text="Explain: observing safely" android:textColor="#E1F5FE" android:textSize="13sp" />
+        <TextView android:id="@+id/tvControlStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:text="Control: READY" android:textColor="#E0F2F1" android:textSize="13sp" />
+        <TextView android:id="@+id/tvProfileEditorStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:text="Profile: READY" android:textColor="#F3E5F5" android:textSize="13sp" />
+        <TextView android:id="@+id/tvDebugTimelineStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:text="Timeline: session-only" android:textColor="#FFF9C4" android:textSize="13sp" />
+        <TextView android:id="@+id/tvUserFeedbackStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:text="Feedback UX: READY" android:textColor="#FFECB3" android:textSize="13sp" />
+
+        <Spinner android:id="@+id/spinnerHudMode" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" />
+        <TextView android:id="@+id/tvHudStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:ellipsize="end" android:maxLines="1" android:text="HUD: OFF" android:textColor="#FF9800" android:textSize="15sp" />
+        <TextView android:id="@+id/tvAiStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:text="AI: IDLE / SAFE" android:textColor="#9E9E9E" android:textSize="15sp" />
+        <TextView android:id="@+id/tvIntentStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="2" android:text="Intent: CONTEXT_POSITIONING SAFE" android:textColor="#40D290" android:textSize="15sp" />
+        <TextView android:id="@+id/tvObserverStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp" android:ellipsize="end" android:maxLines="1" android:text="Observer: IDLE" android:textColor="#80CBC4" android:textSize="14sp" />
+
+        <Button android:id="@+id/btnOverlayPermission" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Grant Overlay Permission" />
+        <Button android:id="@+id/btnAccessibilitySettings" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Open Accessibility Settings" />
+        <Button android:id="@+id/btnTestFrame" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="Test Native Frame" />
+        <Button android:id="@+id/btnToggleHud" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Start HUD" />
+        <Button android:id="@+id/btnToggleAi" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Set AI Active" />
+        <Button android:id="@+id/btnResetRuntimePrivacy" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Reset Runtime Privacy" />
+        <Button android:id="@+id/btnFreezeProfile" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Freeze Current Profile" />
+        <Button android:id="@+id/btnExportSanitized" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Copy Sanitized Status" />
+        <Button android:id="@+id/btnFeedbackHelpful" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Feedback: Helpful" />
+        <Button android:id="@+id/btnFeedbackCaution" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Feedback: Needs Caution" />
+    </LinearLayout>
+</ScrollView>
