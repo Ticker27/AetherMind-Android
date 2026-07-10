@@ -59,6 +59,13 @@ jobs:
         shell: bash
         run: gradle --no-daemon projects
 
+      - name: Clean project (remove all build cache)
+        shell: bash
+        run: |
+          rm -rf ~/.gradle/caches
+          rm -rf app/build
+          gradle --no-daemon clean
+
       - name: Build debug APK
         shell: bash
         run: gradle --no-daemon :app:assembleDebug --stacktrace
