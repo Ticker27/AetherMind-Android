@@ -21,21 +21,9 @@
             android:name=".AetherOverlayService"
             android:exported="false" />
 
-        <!-- Existing telemetry/accessibility observer service from the original renderer package. -->
-        <service
-            android:name=".accessibility.AetherAccessibilityService"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/aether_accessibility_service" />
-        </service>
-
         <!-- Phase 2 execution dispatcher service. Fully-qualified name is required because
-             this class is in com.aethermind.execution while app namespace is com.aether.renderer. -->
+             this class is in com.aethermind.execution while app namespace is com.aether.renderer.
+             Old com.aether.renderer.accessibility.AetherAccessibilityService removed: conflict fix. -->
         <service
             android:name="com.aethermind.execution.AetherAccessibilityService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
