@@ -1,5 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">AetherMind Execution</string>
-    <string name="aether_accessibility_service_label">AetherMind Execution Service</string>
-    <string name="aether_accessibility_service_description">Executes guarded touch gestures only while the configured target app is in the foreground.</string>
+    <string name="app_name">Aether Engine</string>
 </resources>

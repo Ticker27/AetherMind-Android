@@ -1,5 +1,7 @@
-# Keep JNI bridge method names stable.
--keep class com.aethermind.execution.AetherExecutionNative { *; }
+-keepclasseswithmembernames class * {
+    native <methods>;
+}
 
-# AccessibilityService is referenced from AndroidManifest.xml.
--keep class com.aethermind.execution.AetherAccessibilityService { *; }
+-keep class com.aether.renderer.** { *; }
+
+-keep class * extends android.accessibilityservice.AccessibilityService { *; }

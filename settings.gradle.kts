@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "AetherMindAndroid"
+rootProject.name = "AetherMind"
 include(":app")
