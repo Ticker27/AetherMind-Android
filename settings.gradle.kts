@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "AetherMindAndroid_AT131_140_FinalStabilityLock"
+rootProject.name = "AetherMindAndroid"
 include(":app")
