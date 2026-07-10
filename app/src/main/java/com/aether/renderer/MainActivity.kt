@@ -177,7 +177,11 @@ class MainActivity : Activity() {
 
     private fun startHudService() {
         if (Settings.canDrawOverlays(this)) {
-            runCatching { startService(Intent(this, AetherOverlayService::class.java)) }
+            // ใช้ AetherDevOverlayService แทนตัวเก่า (AetherOverlayService)
+            runCatching { 
+                val intent = Intent(this, com.aethermind.ui.AetherDevOverlayService::class.java)
+                startService(intent)
+            }
         }
     }
 
