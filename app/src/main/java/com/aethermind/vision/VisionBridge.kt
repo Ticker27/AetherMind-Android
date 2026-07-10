@@ -1,160 +1,222 @@
 package com.aethermind.vision
 
 import android.graphics.Bitmap
+import androidx.compose.ui.geometry.Offset
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 // =============================================================================
-// Aether Vision Bridge - High-Level Kotlin API
+// Aether Vision Bridge - Kotlin Interface
+// 
+// รวม Ball Detection และ Trajectory Calculation
+// 
+// Usage:
+//   val bridge = VisionBridge()
+//   val balls = bridge.detectBalls(bitmap)
+//   val path = bridge.getTrajectoryPath(cueX, cueY, targetX, targetY)
+//   val info = bridge.getTrajectoryInfo(cueX, cueY, targetX, targetY)
+// =============================================================================
+
+class VisionBridge {
+    
+    init {
+        System.loadLibrary("aether_vision")
+    }
+    
+    // ========================================================================
+    // NATIVE METHODS - Ball Detection
+    // ========================================================================
+    
+    external fun processFrameNative(
+        inputBuffer: ByteBuffer,
+        outputBuffer: ByteBuffer,
+        width: Int,
+        height: Int,
+        stride: Int
+    ): Int
+    
+    // ========================================================================
+    // NATIVE METHODS - Trajectory Calculation (C++ Engine)
+    // ========================================================================
+    
+    /**
+     * คำนวณเส้นวิถีจาก C++ Engine
+     * 
+     * @return FloatArray: [x0, y0, x1, y1, x2, y2, ...] ที่ Normalized 0.0-1.0
+     */
+    external fun calculateTrajectoryNative(
+        cueX: Float, cueY: Float,
+        targetX: Float, targetY: Float
+    ): FloatArray
+    
+    /**
+     * ดึงข้อมูล trajectory metadata
+     * 
+     * @return FloatArray: [angleDegrees, power, confidence, distance]
+     */
+    external fun getTrajectoryInfoNative(
+        cueX: Float, cueY: Float,
+        targetX: Float, targetY: Float
+    ): FloatArray
+    
+    // ========================================================================
+    // HELPER FUNCTIONS
+    // ========================================================================
+    
+    /**
+     * ดึง trajectory path เป็น List<Offset> สำหรับ Compose Canvas
+     * 
+     * @param cueX ตำแหน่ง X ลูกขาว (Normalized 0.0-1.0)
+     * @param cueY ตำแหน่ง Y ลูกขาว (Normalized 0.0-1.0)
+     * @param targetX ตำแหน่ง X ลูกเป้าหมาย (Normalized 0.0-1.0)
+     * @param targetY ตำแหน่ง Y ลูกเป้าหมาย (Normalized 0.0-1.0)
+     * @return List<Offset> รายการพิกัดที่วาดเส้นได้เลย
+     */
+    fun getTrajectoryPath(
+        cueX: Float, cueY: Float,
+        targetX: Float, targetY: Float
+    ): List<Offset> {
+        val rawData = calculateTrajectoryNative(cueX, cueY, targetX, targetY)
+        val path = mutableListOf<Offset>()
+        
+        // วนลูปอ่านทีละคู่ (x, y)
+        for (i in rawData.indices step 2) {
+            if (i + 1 < rawData.size) {
+                path.add(Offset(rawData[i], rawData[i + 1]))
+            }
+        }
+        
+        return path
+    }
+    
+    /**
+     * ดึง trajectory info (metadata)
+     * 
+     * @return TrajectoryInfo พร้อม angle, power, confidence, distance
+     */
+    fun getTrajectoryInfo(
+        cueX: Float, cueY: Float,
+        targetX: Float, targetY: Float
+    ): TrajectoryInfo {
+        val data = getTrajectoryInfoNative(cueX, cueY, targetX, targetY)
+        
+        return if (data.size >= 4) {
+            TrajectoryInfo(
+                angleDegrees = data[0],
+                power = data[1],
+                confidence = data[2],
+                distance = data[3]
+            )
+        } else {
+            TrajectoryInfo()
+        }
+    }
+    
+    /**
+     * ตรวจจับลูกบอลจาก bitmap
+     * 
+     * @param bitmap ภาพที่จะตรวจจับ
+     * @return List<BallResult> รายการลูกบอลที่พบ
+     */
+    fun detectBalls(bitmap: Bitmap): List<BallResult> {
+        // TODO: Implement with VisionProcessor
+        return emptyList()
+    }
+    
+    // ========================================================================
+    // DATA CLASSES
+    // ========================================================================
+    
+    /**
+     * Trajectory Information
+     */
+    data class TrajectoryInfo(
+        val angleDegrees: Float = 0f,      // มุมที่ต้องยิง (0-360)
+        val power: Float = 0.5f,           // พลังที่แนะนำ (0.0-1.0)
+        val confidence: Float = 0f,         // ความมั่นใจ (0.0-1.0)
+        val distance: Float = 0f            // ระยะห่าง (Normalized)
+    ) {
+        /**
+         * ตรวจสอบว่าเป็น shot ที่ดีหรือไม่
+         */
+        fun isGoodShot(): Boolean {
+            return confidence >= 0.6f && power in 0.3f..0.9f
+        }
+        
+        /**
+         * องศาที่อ่านง่าย
+         */
+        fun angleFormatted(): String {
+            return String.format("%.1f°", angleDegrees)
+        }
+        
+        /**
+         * พลังในรูปแบบเปอร์เซ็นต์
+         */
+        fun powerPercent(): Int {
+            return (power * 100).toInt()
+        }
+    }
+    
+    /**
+     * Ball Detection Result
+     */
+    data class BallResult(
+        val id: Int,
+        val x: Float,              // Normalized 0.0-1.0
+        val y: Float,              // Normalized 0.0-1.0
+        val confidence: Float,       // 0.0-1.0
+        val colorIndex: Int,        // 0=unknown, 1=red, 2=yellow, 3=green
+        val radius: Int             // Approximate radius in pixels
+    ) {
+        val isCueBall: Boolean
+            get() = colorIndex == 0
+    }
+    
+    companion object {
+        const val LIB_NAME = "aether_vision"
+    }
+}
+
+// =============================================================================
+// Extension Functions for Compose
 // =============================================================================
 
 /**
- * Vision Bridge - Simple API for ball detection
- * 
- * Usage:
- * ```kotlin
- * val bridge = VisionBridge()
- * bridge.initialize(640, 480)
- * 
- * val balls = bridge.detectBalls(bitmap)
- * balls.forEach { println("Ball at (${it.x}, ${it.y})") }
- * 
- * bridge.shutdown()
- * ```
+ * หาเส้นที่สั้นที่สุดจาก trajectory path
+ * ใช้สำหรับวาดเฉพาะส่วนที่เราต้องการ
  */
-class VisionBridge {
-    
-    private var inputBuffer: ByteBuffer? = null
-    private var outputBuffer: ByteBuffer? = null
-    
-    // Ball output struct size (matches C++ BallOutput)
-    companion object {
-        const val BALL_OUTPUT_SIZE = 16  // 4 + 4 + 2 + 1 + 1 + 2 padding
-        const val MAX_BALLS = 32
-        const val OUTPUT_BUFFER_SIZE = BALL_OUTPUT_SIZE * MAX_BALLS
-    }
-    
-    /**
-     * Initialize buffers
-     */
-    fun initialize(width: Int, height: Int) {
-        val pixelCount = width * height
-        val inputSize = pixelCount * 4  // RGBA
-        
-        inputBuffer = ByteBuffer.allocateDirect(inputSize).apply {
-            order(ByteOrder.nativeOrder())
-        }
-        
-        outputBuffer = ByteBuffer.allocateDirect(OUTPUT_BUFFER_SIZE).apply {
-            order(ByteOrder.nativeOrder())
-        }
-    }
-    
-    /**
-     * Detect balls in bitmap
-     * 
-     * @param bitmap Input bitmap (RGBA format)
-     * @return List of detected balls
-     */
-    fun detectBalls(bitmap: Bitmap): List<BallResult> {
-        val input = inputBuffer ?: run {
-            initialize(bitmap.width, bitmap.height)
-            inputBuffer!!
-        }
-        val output = outputBuffer!!
-        
-        // Get pixels from bitmap
-        val pixels = IntArray(bitmap.width * bitmap.height)
-        bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
-        
-        // Write to input buffer (RGBA format)
-        input.clear()
-        for (pixel in pixels) {
-            // ARGB to RGBA
-            val r = (pixel shr 16) and 0xFF
-            val g = (pixel shr 8) and 0xFF
-            val b = pixel and 0xFF
-            val a = (pixel shr 24) and 0xFF
-            input.put(r.toByte())
-            input.put(g.toByte())
-            input.put(b.toByte())
-            input.put(a.toByte())
-        }
-        input.flip()
-        
-        // Clear output buffer
-        output.clear()
-        for (i in 0 until OUTPUT_BUFFER_SIZE) {
-            output.put(i, 0.toByte())
-        }
-        
-        // Call native
-        val ballCount = AetherVisionNative.processFrameNative(
-            input,
-            output,
-            bitmap.width,
-            bitmap.height,
-            bitmap.width * 4
+fun List<Offset>.takeNearest(count: Int): List<Offset> {
+    if (size <= count) return this
+    return take(count)
+}
+
+/**
+ * แปลง trajectory path ให้อยู่ในขอบเขตหน้าจอ
+ */
+fun List<Offset>.scaleToScreen(
+    screenWidth: Int,
+    screenHeight: Int
+): List<Offset> {
+    return map { offset ->
+        Offset(
+            x = offset.x * screenWidth,
+            y = offset.y * screenHeight
         )
-        
-        if (ballCount <= 0) {
-            return emptyList()
-        }
-        
-        // Parse results
-        val results = mutableListOf<BallResult>()
-        for (i in 0 until ballCount) {
-            val offset = i * BALL_OUTPUT_SIZE
-            
-            // Read BallOutput struct
-            // x, y are in Q0.16 fixed-point (need to convert to float)
-            val xRaw = output.getShort(offset).toInt() and 0xFFFF
-            val yRaw = output.getShort(offset + 2).toInt() and 0xFFFF
-            
-            val x = xRaw / 65536.0f
-            val y = yRaw / 65536.0f
-            
-            val radius = output.getShort(offset + 4).toInt() and 0xFFFF
-            val confidence = output.get(offset + 6).toInt() and 0xFF
-            val colorIndex = output.get(offset + 7).toInt() and 0xFF
-            
-            results.add(BallResult(
-                x = x,
-                y = y,
-                radius = radius,
-                confidence = confidence / 255.0f,
-                colorIndex = colorIndex
-            ))
-        }
-        
-        return results
-    }
-    
-    /**
-     * Release resources
-     */
-    fun shutdown() {
-        inputBuffer = null
-        outputBuffer = null
     }
 }
 
 /**
- * Ball detection result
+ * หาความยาวของ path
  */
-data class BallResult(
-    val x: Float,
-    val y: Float,
-    val radius: Int,
-    val confidence: Float,
-    val colorIndex: Int
-) {
-    val isHighConfidence: Boolean
-        get() = confidence >= 0.7f
+fun List<Offset>.pathLength(): Float {
+    if (size < 2) return 0f
     
-    companion object {
-        const val COLOR_RED = 1
-        const val COLOR_YELLOW = 2
-        const val COLOR_GREEN = 3
+    var length = 0f
+    for (i in 0 until size - 1) {
+        val dx = this[i + 1].x - this[i].x
+        val dy = this[i + 1].y - this[i].y
+        length += kotlin.math.sqrt(dx * dx + dy * dy)
     }
+    return length
 }
