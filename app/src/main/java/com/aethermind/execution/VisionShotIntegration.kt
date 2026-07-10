@@ -150,13 +150,9 @@ class VisionShotIntegration(
             reserved = 0,
             timestampNanos = System.nanoTime()
         )
-        
-        // Create command buffer and write
-        val commandBuffer = AetherExecutionBridge.newCommandBuffer()
-        ActionCommand.writeTo(commandBuffer, command)
-        
-        // Push to Native Queue
-        val status = AetherExecutionBridge.pushCommand(commandBuffer)
+
+        // Push to Native Queue (passes ActionCommand directly)
+        val status = AetherExecutionBridge.pushCommand(command)
         
         if (status == NativeExecutionStatus.OK) {
             lastCueBall = cue
