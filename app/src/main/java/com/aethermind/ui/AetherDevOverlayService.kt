@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,7 +27,8 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.setViewTreeLifecycleOwner
-import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.aethermind.execution.AetherRuntime
+import com.aethermind.execution.VisionShotIntegration
 
 /**
  * Aether Developer Overlay Service
@@ -65,7 +68,6 @@ class AetherDevOverlayService : LifecycleService() {
 
         composeView = ComposeView(this).apply {
             setViewTreeLifecycleOwner(this@AetherDevOverlayService)
-            setViewTreeSavedStateRegistryOwner(this@AetherDevOverlayService)
             setContent {
                 AetherDeveloperOverlay()
             }
@@ -105,6 +107,13 @@ class AetherDevOverlayService : LifecycleService() {
     // ========================================================================
     // COMPOSE UI - Aether Developer Overlay
     // ========================================================================
+
+    // AUTO PLAY State
+    private var visionIntegration: VisionShotIntegration? by mutableStateOf(null)
+    private var isAutoPlayRunning by mutableStateOf(false)
+    
+    // Target package for auto play
+    private val targetPackage = "com.miniclip.eightballpool"
 
     @Composable
     fun AetherDeveloperOverlay() {
