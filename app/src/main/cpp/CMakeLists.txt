@@ -77,3 +77,29 @@ target_compile_features(aether_execution_core PRIVATE cxx_std_17)
 target_link_libraries(aether_execution_core PRIVATE
     ${log-lib}
 )
+
+# -----------------------------------------------------------------------------
+# Phase 3 Aether Vision Lite - Ball Detection
+# -----------------------------------------------------------------------------
+add_library(aether_vision SHARED
+    vision/VisionProcessorImpl.cpp
+    vision/aether_vision_jni.cpp
+)
+
+target_include_directories(aether_vision PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/vision"
+)
+
+target_compile_features(aether_vision PRIVATE cxx_std_17)
+
+target_compile_options(aether_vision PRIVATE
+    -O3
+    -ffast-math
+    -fno-exceptions
+    -fno-rtti
+    $<$<CONFIG:Release>:-funroll-loops>
+)
+
+target_link_libraries(aether_vision PRIVATE
+    ${log-lib}
+)
