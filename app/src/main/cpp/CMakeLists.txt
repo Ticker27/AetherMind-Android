@@ -79,10 +79,11 @@ target_link_libraries(aether_execution_core PRIVATE
 )
 
 # -----------------------------------------------------------------------------
-# Phase 3 Aether Vision Lite - Ball Detection
+# Phase 3 Aether Vision Lite - Ball Detection + Trajectory
 # -----------------------------------------------------------------------------
 add_library(aether_vision SHARED
     vision/VisionProcessorImpl.cpp
+    vision/TrajectoryEngine.cpp
     vision/aether_vision_jni.cpp
 )
 
