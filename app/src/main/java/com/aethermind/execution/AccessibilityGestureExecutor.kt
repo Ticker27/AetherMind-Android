@@ -34,6 +34,26 @@ data class GestureExecutionConfig(
     val tapDurationMs: Long = ViewConfiguration.getTapTimeout().toLong()
 )
 
+object GestureCommandPacking {
+    /**
+     * Packs a signed swipe delta into ActionCommand.reserved without changing
+     * the 24-byte native ABI. Lower 16 bits = dx, upper 16 bits = dy.
+     * Values are clamped to signed Int16 range for predictable JNI transfer.
+     */
+    fun packSwipeDelta(dxPx: Float, dyPx: Float): Int {
+        val dx = dxPx.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
+        val dy = dyPx.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
+        return ((dy and 0xFFFF) shl 16) or (dx and 0xFFFF)
+    }
+
+    fun unpackSwipeDelta(packed: Int): Pair<Float, Float>? {
+        if (packed == 0) return null
+        val dx = (packed and 0xFFFF).toShort().toFloat()
+        val dy = ((packed ushr 16) and 0xFFFF).toShort().toFloat()
+        return dx to dy
+    }
+}
+
 class AccessibilityGestureExecutor(
     private val config: GestureExecutionConfig = GestureExecutionConfig()
 ) : ScreenActionExecutor {
@@ -76,10 +96,14 @@ class AccessibilityGestureExecutor(
     private suspend fun swipe(service: AccessibilityService, command: ActionCommand) {
         val start = toScreenPoint(service, command.x, command.y)
 
+        val commandDelta = GestureCommandPacking.unpackSwipeDelta(command.reserved)
+        val deltaX = commandDelta?.first ?: config.swipeDeltaXPx
+        val deltaY = commandDelta?.second ?: config.swipeDeltaYPx
+
         val end = clampToDisplay(
             service = service,
-            x = start.x + config.swipeDeltaXPx,
-            y = start.y + config.swipeDeltaYPx
+            x = start.x + deltaX,
+            y = start.y + deltaY
         )
 
         val path = Path().apply {

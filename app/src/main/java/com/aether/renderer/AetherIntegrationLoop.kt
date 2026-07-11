@@ -43,6 +43,23 @@ object AetherIntegrationLoop {
      */
     external fun nativeSetSkillLevel(level: Int): Boolean
 
+    /**
+     * Native auto-play switch. The UI must keep this disabled by default.
+     * When enabled, Kotlin still applies package-scope and emergency-stop guards
+     * before any Accessibility gesture is dispatched.
+     */
+    external fun nativeAutoPlayEnabled(): Boolean
+
+    external fun nativeSetAutoPlayEnabled(enabled: Boolean): Boolean
+
+    /**
+     * Skill-adaptive auto-play policy exported by C++.
+     * Basic = slower/softer, Smart = balanced, Pro = faster/stronger.
+     */
+    external fun nativeAutoPlayIntervalMs(): Int
+
+    external fun nativeAutoPlaySwipePowerPx(): Float
+
     fun initializeAetherNative(): Boolean {
         val stateSize = NativeTrajectoryBridge.nativeStateSize()
         val layoutVersion = NativeTrajectoryBridge.nativeStateLayoutVersion()

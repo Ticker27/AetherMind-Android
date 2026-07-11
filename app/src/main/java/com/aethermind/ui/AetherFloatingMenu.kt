@@ -58,6 +58,7 @@ fun AetherFloatingMenuRoot(
     onToggleAim: () -> Unit,
     onToggleDebug: () -> Unit,
     onSetAiSkillLevel: (AiSkillLevel) -> Unit,
+    onToggleAutoPlay: () -> Unit,
     onDrag: (dx: Float, dy: Float) -> Unit = { _, _ -> }
 ) {
     val expanded = remember { mutableStateOf(false) }
@@ -85,7 +86,8 @@ fun AetherFloatingMenuRoot(
                 onToggleHud = onToggleHud,
                 onToggleAim = onToggleAim,
                 onToggleDebug = onToggleDebug,
-                onSetAiSkillLevel = onSetAiSkillLevel
+                onSetAiSkillLevel = onSetAiSkillLevel,
+                onToggleAutoPlay = onToggleAutoPlay
             )
         } else {
             MiniAetherBubble(
@@ -152,7 +154,8 @@ private fun ExpandedAetherMenu(
     onToggleHud: () -> Unit,
     onToggleAim: () -> Unit,
     onToggleDebug: () -> Unit,
-    onSetAiSkillLevel: (AiSkillLevel) -> Unit
+    onSetAiSkillLevel: (AiSkillLevel) -> Unit,
+    onToggleAutoPlay: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -181,13 +184,20 @@ private fun ExpandedAetherMenu(
             onToggleVision = onToggleVision,
             onToggleAim = onToggleAim,
             onToggleDebug = onToggleDebug,
-            onOpenPermissions = onOpenPermissions
+            onOpenPermissions = onOpenPermissions,
+            onToggleAutoPlay = onToggleAutoPlay
         )
 
         Spacer(modifier = Modifier.height(14.dp))
         AiSkillLevelCard(
             state = state,
             onSetAiSkillLevel = onSetAiSkillLevel
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+        AutoPlayCard(
+            state = state,
+            onToggleAutoPlay = onToggleAutoPlay
         )
 
         Spacer(modifier = Modifier.height(14.dp))
@@ -276,7 +286,8 @@ private fun StatusRows(state: OverlayUiState) {
         StatusRow("Aim Guide", if (state.showAimGuide) "ACTIVE" else "OFF", state.showAimGuide)
         StatusRow("Vision", if (state.showVisionMarkers) "ACTIVE" else "OFF", state.showVisionMarkers)
         StatusRow("AI Skill", state.aiSkillShortLabel.uppercase(), true)
-        StatusRow("Execution", "LOCKED", false, locked = true)
+        StatusRow("Auto Play", if (state.autoPlayEnabled) "ARMED" else "OFF", state.autoPlayEnabled)
+        StatusRow("Execution", if (state.autoPlayEnabled) "GUARDED" else "LOCKED", state.autoPlayEnabled, locked = !state.autoPlayEnabled)
     }
 }
 
@@ -320,7 +331,8 @@ private fun QuickMenuGrid(
     onToggleVision: () -> Unit,
     onToggleAim: () -> Unit,
     onToggleDebug: () -> Unit,
-    onOpenPermissions: () -> Unit
+    onOpenPermissions: () -> Unit,
+    onToggleAutoPlay: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -330,7 +342,7 @@ private fun QuickMenuGrid(
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             MenuChip("Debug", Modifier.weight(1f), onClick = onToggleDebug)
-            MenuChip("Rules", Modifier.weight(1f), onClick = {})
+            MenuChip("Auto", Modifier.weight(1f), warning = true, onClick = onToggleAutoPlay)
             MenuChip("Perms", Modifier.weight(1f), onClick = onOpenPermissions)
         }
     }
@@ -452,6 +464,64 @@ private fun VisionCard(state: OverlayUiState) {
         InfoLine("Target", state.targetBall?.label ?: "N/A")
         InfoLine("Confidence", "${state.confidence}%")
         InfoLine("AI Skill", state.aiSkillLabel)
+        InfoLine("Auto Play", state.autoPlayStatus)
+    }
+}
+
+@Composable
+private fun AutoPlayCard(
+    state: OverlayUiState,
+    onToggleAutoPlay: () -> Unit
+) {
+    val title = if (state.autoPlayEnabled) "Auto Play Armed" else "Auto Play Off"
+    val statusColor = if (state.autoPlayEnabled) Color(0xFFFFC857) else Color(0xFF8D98B8)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color(0xFF171B25))
+            .border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(18.dp))
+            .padding(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "C++ policy + package guard + emergency stop",
+                    color = Color(0xFF8D98B8),
+                    fontSize = 11.sp,
+                    lineHeight = 14.sp
+                )
+            }
+            Text(
+                text = state.autoPlayStatus,
+                color = statusColor,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+        InfoLine("Cadence", "${state.autoPlayIntervalMs} ms")
+        InfoLine("Pull Power", "${state.autoPlayPowerPx.toInt()} px")
+
+        Spacer(modifier = Modifier.height(10.dp))
+        MenuChip(
+            text = if (state.autoPlayEnabled) "Disable Auto" else "Enable Auto",
+            modifier = Modifier.fillMaxWidth(),
+            warning = !state.autoPlayEnabled,
+            danger = state.autoPlayEnabled,
+            onClick = onToggleAutoPlay
+        )
     }
 }
 

@@ -23,6 +23,7 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.ViewTreeSavedStateRegistryOwner
 import com.aether.renderer.AetherIntegrationLoop
+import com.aethermind.execution.AutoPlayController
 import com.aethermind.ui.overlay.AetherAimCanvas
 import com.aethermind.ui.overlay.AiSkillLevel
 import com.aethermind.ui.overlay.MockPoolOverlayProvider
@@ -68,6 +69,9 @@ class AetherDevOverlayService : LifecycleService(), SavedStateRegistryOwner, Vie
     private var showVisionMarkers = true
     private var showDebugLabels = false
     private var aiSkillLevel = AiSkillLevel.INTERMEDIATE
+    private var autoPlayEnabled = false
+    private var autoPlayStatus = "OFF"
+    private var autoPlayController: AutoPlayController? = null
 
     private var overlayState by mutableStateOf(OverlayUiState())
 
@@ -75,6 +79,7 @@ class AetherDevOverlayService : LifecycleService(), SavedStateRegistryOwner, Vie
         override fun run() {
             if (!tickerRunning) return
             updateMockOverlayState()
+            autoPlayController?.onFrame(overlayState)
             handler.postDelayed(this, FRAME_DELAY_MS)
         }
     }
@@ -87,6 +92,11 @@ class AetherDevOverlayService : LifecycleService(), SavedStateRegistryOwner, Vie
 
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         aiSkillLevel = readNativeSkillLevel()
+        autoPlayEnabled = readNativeAutoPlayEnabled()
+        autoPlayStatus = if (autoPlayEnabled) "ARMED" else "OFF"
+        autoPlayController = AutoPlayController(this) { status ->
+            autoPlayStatus = status
+        }
         overlayState = createInitialState()
 
         createCanvasWindow()
@@ -96,6 +106,8 @@ class AetherDevOverlayService : LifecycleService(), SavedStateRegistryOwner, Vie
 
     override fun onDestroy() {
         stopTicker()
+        autoPlayController?.close()
+        autoPlayController = null
         removeOverlayViews()
         serviceViewModelStore.clear()
         super.onDestroy()
@@ -160,6 +172,9 @@ class AetherDevOverlayService : LifecycleService(), SavedStateRegistryOwner, Vie
                         },
                         onSetAiSkillLevel = { level ->
                             setAiSkillLevel(level)
+                        },
+                        onToggleAutoPlay = {
+                            setAutoPlayEnabled(!autoPlayEnabled)
                         },
                         onDrag = { dx, dy -> moveMenuWindow(dx, dy) }
                     )
@@ -242,7 +257,12 @@ class AetherDevOverlayService : LifecycleService(), SavedStateRegistryOwner, Vie
             showAimGuide = showAimGuide,
             showVisionMarkers = showVisionMarkers,
             showDebugLabels = showDebugLabels,
-            aiSkillLevel = aiSkillLevel
+            aiSkillLevel = aiSkillLevel,
+            autoPlayEnabled = autoPlayEnabled,
+            autoPlayArmed = autoPlayEnabled && autoPlayStatus != "OFF",
+            autoPlayStatus = autoPlayStatus,
+            autoPlayIntervalMs = readNativeAutoPlayIntervalMs(),
+            autoPlayPowerPx = readNativeAutoPlayPowerPx()
         )
     }
 
@@ -256,7 +276,12 @@ class AetherDevOverlayService : LifecycleService(), SavedStateRegistryOwner, Vie
             showAimGuide = showAimGuide,
             showVisionMarkers = showVisionMarkers,
             showDebugLabels = showDebugLabels,
-            aiSkillLevel = aiSkillLevel
+            aiSkillLevel = aiSkillLevel,
+            autoPlayEnabled = autoPlayEnabled,
+            autoPlayArmed = autoPlayEnabled && autoPlayStatus != "OFF",
+            autoPlayStatus = autoPlayStatus,
+            autoPlayIntervalMs = readNativeAutoPlayIntervalMs(),
+            autoPlayPowerPx = readNativeAutoPlayPowerPx()
         )
     }
 
@@ -278,6 +303,43 @@ class AetherDevOverlayService : LifecycleService(), SavedStateRegistryOwner, Vie
             // Keep the UI responsive even if native loading failed in a preview or
             // restricted environment. Real device builds should return true.
             level
+        }
+
+        publishStateNow()
+    }
+
+
+    private fun readNativeAutoPlayEnabled(): Boolean {
+        return runCatching { AetherIntegrationLoop.nativeAutoPlayEnabled() }
+            .getOrDefault(false)
+    }
+
+    private fun readNativeAutoPlayIntervalMs(): Int {
+        return runCatching { AetherIntegrationLoop.nativeAutoPlayIntervalMs() }
+            .getOrDefault(1200)
+    }
+
+    private fun readNativeAutoPlayPowerPx(): Float {
+        return runCatching { AetherIntegrationLoop.nativeAutoPlaySwipePowerPx() }
+            .getOrDefault(420f)
+    }
+
+    private fun setAutoPlayEnabled(enabled: Boolean) {
+        val accepted = runCatching {
+            AetherIntegrationLoop.nativeSetAutoPlayEnabled(enabled)
+        }.getOrDefault(false)
+
+        autoPlayEnabled = if (accepted) {
+            readNativeAutoPlayEnabled()
+        } else {
+            enabled
+        }
+
+        if (!autoPlayEnabled) {
+            autoPlayStatus = "OFF"
+            autoPlayController?.stopRuntime("AUTO_PLAY_TOGGLED_OFF")
+        } else {
+            autoPlayStatus = "ARMED"
         }
 
         publishStateNow()
