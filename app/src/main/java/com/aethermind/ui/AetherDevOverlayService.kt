@@ -47,6 +47,12 @@ import com.aethermind.ui.overlay.TrajectoryLineType
  */
 class AetherDevOverlayService : Service() {
 
+    companion object {
+        const val ACTION_START_OVERLAY = "com.aethermind.ui.action.START_OVERLAY"
+        const val ACTION_STOP_OVERLAY = "com.aethermind.ui.action.STOP_OVERLAY"
+        const val ACTION_TOGGLE_MENU = "com.aethermind.ui.action.TOGGLE_MENU"
+    }
+
     private var windowManager: WindowManager? = null
     private var canvasView: AimOverlayView? = null
     private var menuView: View? = null
@@ -54,6 +60,7 @@ class AetherDevOverlayService : Service() {
 
     private val handler = Handler(Looper.getMainLooper())
     private var tickerRunning = false
+    private var menuVisible = true
 
     private var showHud = true
     private var showAimGuide = true
@@ -111,6 +118,25 @@ class AetherDevOverlayService : Service() {
         startTicker()
     }
 
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action) {
+            ACTION_STOP_OVERLAY -> {
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            ACTION_TOGGLE_MENU -> {
+                toggleMenuVisibility()
+            }
+            ACTION_START_OVERLAY,
+            null -> {
+                if (menuView == null && menuVisible) {
+                    showMenuWindow()
+                }
+            }
+        }
+        return START_NOT_STICKY
+    }
+
     override fun onDestroy() {
         stopTicker()
         autoPlayController?.close()
@@ -132,11 +158,9 @@ class AetherDevOverlayService : Service() {
             canvasView = canvas
             wm.addView(canvas, createCanvasLayoutParams())
 
-            val menu = createMenuView()
-            menuView = menu
-            val params = createMenuLayoutParams()
-            menuParams = params
-            wm.addView(menu, params)
+            if (menuVisible) {
+                showMenuWindow()
+            }
         }.onFailure {
             removeOverlayViews()
         }.isSuccess
@@ -207,10 +231,10 @@ class AetherDevOverlayService : Service() {
         val row2 = row()
         debugButton = button("Debug", ::toggleDebug)
         autoButton = button("Auto", ::toggleAutoPlay)
-        val close = button("Close") { stopSelf() }
+        val hideMenu = button("Hide Menu") { hideMenuWindow() }
         row2.addView(debugButton, weightParams())
         row2.addView(autoButton, weightParams())
-        row2.addView(close, weightParams())
+        row2.addView(hideMenu, weightParams())
         root.addView(row2)
 
         root.addView(space(8))
@@ -230,6 +254,40 @@ class AetherDevOverlayService : Service() {
         installDrag(root)
         updateMenuTexts()
         return root
+    }
+
+    private fun showMenuWindow() {
+        val wm = windowManager ?: return
+        if (!Settings.canDrawOverlays(this)) return
+        if (menuView != null) return
+        runCatching {
+            val menu = createMenuView()
+            val params = createMenuLayoutParams()
+            menuView = menu
+            menuParams = params
+            menuVisible = true
+            wm.addView(menu, params)
+        }.onFailure {
+            menuView = null
+            menuParams = null
+        }
+    }
+
+    private fun hideMenuWindow() {
+        val wm = windowManager
+        menuView?.let { view -> runCatching { wm?.removeView(view) } }
+        menuView = null
+        menuParams = null
+        menuVisible = false
+    }
+
+    private fun toggleMenuVisibility() {
+        if (menuView == null) {
+            menuVisible = true
+            showMenuWindow()
+        } else {
+            hideMenuWindow()
+        }
     }
 
     private fun installDrag(view: View) {
@@ -453,6 +511,7 @@ class AetherDevOverlayService : Service() {
         menuView = null
         canvasView = null
         menuParams = null
+        menuVisible = false
     }
 
     private fun dp(value: Int): Int {

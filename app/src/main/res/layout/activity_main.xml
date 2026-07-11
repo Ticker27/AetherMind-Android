@@ -42,7 +42,8 @@
         <Button android:id="@+id/btnOverlayPermission" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Grant Overlay Permission" />
         <Button android:id="@+id/btnAccessibilitySettings" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Open Accessibility Settings" />
         <Button android:id="@+id/btnTestFrame" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="Test Native Frame" />
-        <Button android:id="@+id/btnToggleHud" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Start HUD" />
+        <Button android:id="@+id/btnToggleHud" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="START OVERLAY" />
+        <Button android:id="@+id/btnToggleOverlayMenu" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="SHOW / HIDE MENU" />
         <Button android:id="@+id/btnToggleAi" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Set AI Active" />
         <Button android:id="@+id/btnResetRuntimePrivacy" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Reset Runtime Privacy" />
         <Button android:id="@+id/btnFreezeProfile" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Freeze Current Profile" />

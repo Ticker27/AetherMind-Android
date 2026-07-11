@@ -64,7 +64,8 @@ class MainActivity : Activity() {
         handler.removeCallbacks(refreshLoop)
         handler.post(refreshLoop)
         syncPermissionButtons()
-        if (Settings.canDrawOverlays(this)) startHudService()
+        // AT165: do not auto-start the floating overlay when the app opens.
+        // The user explicitly starts it with the START OVERLAY button.
     }
 
     override fun onPause() {
@@ -124,10 +125,11 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.btnTestFrame).setOnClickListener { runTestNativeFrame() }
 
         findViewById<Button>(R.id.btnToggleHud).setOnClickListener {
-            AetherIntegrationLoop.nativeOnKeyEvent(24, true)
-            val visible = AetherIntegrationLoop.nativeHudVisible()
-            if (visible) startHudService() else stopHudService()
-            updatePanelStatus(AetherRuntimeBus.telemetry)
+            toggleOverlayServiceExplicitly()
+        }
+
+        findViewById<Button>(R.id.btnToggleOverlayMenu).setOnClickListener {
+            toggleOverlayMenuExplicitly()
         }
 
         findViewById<Button>(R.id.btnToggleAi).setOnClickListener {
@@ -152,15 +154,14 @@ class MainActivity : Activity() {
             requestOverlayPermission()
             return
         }
-        if (Settings.canDrawOverlays(this)) startHudService()
+        // Permission flow only asks for permission. It must not auto-start the overlay.
     }
 
     private fun requestOverlayPermission() {
         if (!Settings.canDrawOverlays(this)) {
             startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
         } else {
-            toast("Overlay already granted")
-            startHudService()
+            toast("Overlay already granted. Press START OVERLAY to run it.")
         }
     }
 
@@ -168,10 +169,52 @@ class MainActivity : Activity() {
         startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
     }
 
+    private fun toggleOverlayServiceExplicitly() {
+        if (!Settings.canDrawOverlays(this)) {
+            requestOverlayPermission()
+            return
+        }
+
+        val started = prefs.getBoolean("overlay_service_started", false)
+        if (started) {
+            stopHudService()
+            prefs.edit().putBoolean("overlay_service_started", false).apply()
+            if (AetherIntegrationLoop.nativeHudVisible()) {
+                AetherIntegrationLoop.nativeOnKeyEvent(24, true)
+            }
+            toast("Overlay stopped")
+        } else {
+            startHudService()
+            prefs.edit().putBoolean("overlay_service_started", true).apply()
+            if (!AetherIntegrationLoop.nativeHudVisible()) {
+                AetherIntegrationLoop.nativeOnKeyEvent(24, true)
+            }
+            toast("Overlay started")
+        }
+        updatePanelStatus(AetherRuntimeBus.telemetry)
+    }
+
+    private fun toggleOverlayMenuExplicitly() {
+        if (!prefs.getBoolean("overlay_service_started", false)) {
+            toast("Press START OVERLAY first")
+            return
+        }
+        runCatching {
+            val intent = Intent(this, com.aethermind.ui.AetherDevOverlayService::class.java).apply {
+                action = com.aethermind.ui.AetherDevOverlayService.ACTION_TOGGLE_MENU
+            }
+            startService(intent)
+        }.onFailure {
+            toast("Unable to toggle menu")
+        }
+    }
+
     private fun startHudService() {
         if (Settings.canDrawOverlays(this)) {
             runCatching {
-                val intent = Intent(this, com.aethermind.ui.AetherDevOverlayService::class.java)
+                val intent = Intent(this, com.aethermind.ui.AetherDevOverlayService::class.java).apply {
+                    action = com.aethermind.ui.AetherDevOverlayService.ACTION_START_OVERLAY
+                }
                 startService(intent)
             }
         }
@@ -179,8 +222,14 @@ class MainActivity : Activity() {
 
     private fun stopHudService() {
         runCatching {
-            val intent = Intent(this, com.aethermind.ui.AetherDevOverlayService::class.java)
-            stopService(intent)
+            val intent = Intent(this, com.aethermind.ui.AetherDevOverlayService::class.java).apply {
+                action = com.aethermind.ui.AetherDevOverlayService.ACTION_STOP_OVERLAY
+            }
+            startService(intent)
+        }
+        runCatching {
+            val stopIntent = Intent(this, com.aethermind.ui.AetherDevOverlayService::class.java)
+            stopService(stopIntent)
         }
     }
 
@@ -207,7 +256,6 @@ class MainActivity : Activity() {
         val telemetry = if (success) PhysicsStateBuffer.readTelemetry(outputStateBuffer).copy(telemetryOnly = true) else null
         AetherRuntimeBus.publishTelemetry(telemetry)
         updatePanelStatus(telemetry)
-        startHudService()
         if (showToast) toast(if (success) "Native frame OK" else "Native frame failed")
     }
 
@@ -288,7 +336,9 @@ class MainActivity : Activity() {
         } ?: " ${decision.safetyBadge}"
         findViewById<TextView>(R.id.tvIntentStatus).text = "Intent: $intentLabel$detail"
 
-        findViewById<Button>(R.id.btnToggleHud).text = if (AetherIntegrationLoop.nativeHudVisible()) "STOP HUD" else "START HUD"
+        val overlayStarted = prefs.getBoolean("overlay_service_started", false)
+        findViewById<Button>(R.id.btnToggleHud).text = if (overlayStarted) "STOP OVERLAY" else "START OVERLAY"
+        findViewById<Button>(R.id.btnToggleOverlayMenu).text = "SHOW / HIDE MENU"
         findViewById<Button>(R.id.btnToggleAi).text = if (AetherIntegrationLoop.nativeAiActive()) "SET AI IDLE" else "SET AI ACTIVE"
         syncPermissionButtons()
     }
