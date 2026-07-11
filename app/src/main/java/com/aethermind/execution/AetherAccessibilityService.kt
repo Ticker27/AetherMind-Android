@@ -4,9 +4,12 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
+import com.aether.renderer.accessibility.AccessibilityStateMapper
 import java.util.concurrent.atomic.AtomicReference
 
 class AetherAccessibilityService : AccessibilityService() {
+    private var stateMapper: AccessibilityStateMapper? = null
+
     companion object {
         private const val TAG = "AetherAccessibilitySvc"
 
@@ -22,6 +25,7 @@ class AetherAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
 
         serviceRef.set(this)
+        stateMapper = AccessibilityStateMapper(this)
 
         serviceInfo = AccessibilityServiceInfo().apply {
             eventTypes =
@@ -47,6 +51,18 @@ class AetherAccessibilityService : AccessibilityService() {
         if (!packageName.isNullOrBlank()) {
             latestPackageRef.set(packageName)
         }
+
+        // Accessibility is the Android-side eye/context shell. It observes the
+        // active window and publishes normalized observer/world state through
+        // AccessibilityStateMapper. Decision-making remains in the native C++
+        // controller; this service does not compute shots and does not enqueue
+        // screen actions.
+        val root = runCatching { rootInActiveWindow }.getOrNull()
+        try {
+            stateMapper?.onEvent(event, root)
+        } finally {
+            root?.recycle()
+        }
     }
 
     override fun onInterrupt() {
@@ -58,6 +74,7 @@ class AetherAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        stateMapper = null
         serviceRef.compareAndSet(this, null)
         Log.w(TAG, "Accessibility service destroyed.")
         super.onDestroy()
