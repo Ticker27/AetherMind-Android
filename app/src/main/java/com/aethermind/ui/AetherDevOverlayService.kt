@@ -52,6 +52,7 @@ class AetherDevOverlayService : Service() {
         const val ACTION_START_OVERLAY = "com.aethermind.ui.action.START_OVERLAY"
         const val ACTION_STOP_OVERLAY = "com.aethermind.ui.action.STOP_OVERLAY"
         const val ACTION_TOGGLE_MENU = "com.aethermind.ui.action.TOGGLE_MENU"
+        const val FRAME_DELAY_MS = 33L
     }
 
     private var windowManager: WindowManager? = null
@@ -638,7 +639,4 @@ class AetherDevOverlayService : Service() {
         }
     }
 
-    private companion object {
-        const val FRAME_DELAY_MS = 33L
-    }
 }
