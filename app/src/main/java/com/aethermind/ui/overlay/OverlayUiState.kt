@@ -56,6 +56,11 @@ data class TrajectorySegment(
 
 data class OverlayUiState(
     val aiSkillLevel: AiSkillLevel = AiSkillLevel.INTERMEDIATE,
+    val autoPlayEnabled: Boolean = false,
+    val autoPlayArmed: Boolean = false,
+    val autoPlayStatus: String = "OFF",
+    val autoPlayIntervalMs: Int = 1200,
+    val autoPlayPowerPx: Float = 420f,
     val showHud: Boolean = true,
     val showAimGuide: Boolean = true,
     val showVisionMarkers: Boolean = true,
@@ -74,4 +79,7 @@ data class OverlayUiState(
 
     val aiSkillShortLabel: String
         get() = aiSkillLevel.shortLabel
+
+    val autoPlayLabel: String
+        get() = if (autoPlayEnabled) "AUTO ON" else "AUTO OFF"
 }

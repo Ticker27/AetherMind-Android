@@ -266,7 +266,7 @@ class MainActivity : Activity() {
         findViewById<TextView>(R.id.tvOverlayStatus).text = "Overlay: ${if (boundary.overlayGranted) "GRANTED" else "MISSING"}"
         findViewById<TextView>(R.id.tvAccessibilityStatus).text = "Accessibility: ${if (boundary.accessibilityEnabled) "ENABLED" else "DISABLED"}"
         findViewById<TextView>(R.id.tvHudStatus).text = "HUD: ${if (boundary.hudVisible) "ON" else "OFF"} mode=${profile.hudMode.name} gate=${hudGate.badge}"
-        findViewById<TextView>(R.id.tvAiStatus).text = "AI: ${if (boundary.aiActive) "ACTIVE" else "IDLE"} / auto=OFF / ${decision.safetyBadge} / ${security.securityBadge}"
+        findViewById<TextView>(R.id.tvAiStatus).text = "AI: ${if (boundary.aiActive) "ACTIVE" else "IDLE"} / auto=${if (AetherIntegrationLoop.nativeAutoPlayEnabled()) "ON" else "OFF"} / ${decision.safetyBadge} / ${security.securityBadge}"
         findViewById<TextView>(R.id.tvObserverStatus).text = "Observer: ACTIVE nodes=${snap.nodeCount} click=${snap.clickableCount} text=${snap.textNodeCount} depth=${snap.maxDepth}"
         findViewById<TextView>(R.id.tvTargetAppStatus).text = "Target: $pkgLabel src=${profile.source.name} ${world.widthPx}x${world.heightPx}/${world.densityBucket}"
         findViewById<TextView>(R.id.tvSceneStatus).text = "Context: $ctxLabel c=${fmt(contextState.contextConfidence)} r=${fmt(contextState.contextRisk)}"
