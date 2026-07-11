@@ -45,7 +45,8 @@ import com.aethermind.execution.VisionShotIntegration
 class AetherDevOverlayService : LifecycleService() {
 
     private var windowManager: android.view.WindowManager? = null
-    private var composeView: ComposeView? = null
+    private var canvasView: ComposeView? = null
+    private var menuView: ComposeView? = null
 
     // ========================================================================
     // LIFECYCLE
@@ -55,8 +56,10 @@ class AetherDevOverlayService : LifecycleService() {
         super.onCreate()
         windowManager = getSystemService(WINDOW_SERVICE) as android.view.WindowManager
 
-        // Window params - ให้วาด Canvas ทับเกมได้เต็มจอ
-        val params = android.view.WindowManager.LayoutParams(
+        // ====================================================================
+        // 1. Canvas Overlay Window - ทับเกม ไม่รับ touch (FLAG_NOT_TOUCHABLE)
+        // ====================================================================
+        val canvasParams = android.view.WindowManager.LayoutParams(
             android.view.WindowManager.LayoutParams.MATCH_PARENT,
             android.view.WindowManager.LayoutParams.MATCH_PARENT,
             android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
@@ -66,20 +69,67 @@ class AetherDevOverlayService : LifecycleService() {
             PixelFormat.TRANSLUCENT
         )
 
-        composeView = ComposeView(this).apply {
+        canvasView = ComposeView(this).apply {
             setViewTreeLifecycleOwner(this@AetherDevOverlayService)
             setContent {
-                AetherDeveloperOverlay()
+                AetherCanvasOverlay()
             }
         }
 
-        windowManager?.addView(composeView, params)
+        windowManager?.addView(canvasView, canvasParams)
+
+        // ====================================================================
+        // 2. Floating Menu Window - ลอยมุมขวาบน รับ touch ได้
+        // ====================================================================
+        menuView = ComposeView(this).apply {
+            setViewTreeLifecycleOwner(this@AetherDevOverlayService)
+            setContent {
+                MaterialTheme {
+                    AetherFloatingMenuRoot(
+                        state = FloatingMenuState(
+                            engineStatus = EngineStatus.Ready,
+                            visionActive = true,
+                            overlayVisible = true,
+                            trajectoryReady = true,
+                            executionLocked = true,
+                            fps = 30,
+                            ballCount = 8,
+                            confidence = 91,
+                            targetLabel = "Yellow Ball",
+                            modeLabel = "PROPOSE ONLY"
+                        ),
+                        onClose = {
+                            stopSelf()
+                        },
+                        onHideHud = {
+                            // TODO: hide canvas overlay
+                        },
+                        onReset = {
+                            // TODO: reset runtime state
+                        },
+                        onOpenPermissions = {
+                            // TODO: open settings screen
+                        },
+                        onToggleVision = {
+                            // TODO: enable/disable vision layer
+                        },
+                        onToggleHud = {
+                            // TODO: show/hide HUD layer
+                        }
+                    )
+                }
+            }
+        }
+
+        windowManager?.addView(menuView, createMenuLayoutParams())
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        composeView?.let { windowManager?.removeView(it) }
-        composeView = null
+        canvasView?.let { windowManager?.removeView(it) }
+        menuView?.let { windowManager?.removeView(it) }
+        canvasView = null
+        menuView = null
     }
 
     override fun onBind(intent: Intent): IBinder? {
@@ -116,19 +166,12 @@ class AetherDevOverlayService : LifecycleService() {
     private val targetPackage = "com.miniclip.eightballpool"
 
     @Composable
-    fun AetherDeveloperOverlay() {
-        // State สำหรับควบคุม UI
-        var isMenuOpen by remember { mutableStateOf(false) }
+    fun AetherCanvasOverlay() {
+        // State สำหรับควบคุมการวาด Canvas overlay
         var showAimLine by remember { mutableStateOf(true) }
         var showBallMarkers by remember { mutableStateOf(true) }
         var showGhostBall by remember { mutableStateOf(true) }
         var showPowerBar by remember { mutableStateOf(false) }
-        
-        // อนิเมชั่นเมนูสไลด์
-        val menuWidth by animateDpAsState(
-            targetValue = if (isMenuOpen) 260.dp else 48.dp,
-            label = "MenuSlide"
-        )
 
         Box(modifier = Modifier.fillMaxSize()) {
             
@@ -266,170 +309,25 @@ class AetherDevOverlayService : LifecycleService() {
                 }
             }
 
-            // =================================================================
-            // 2. Debug Menu - ลอยอยู่ขอบขวา
-            // =================================================================
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .width(menuWidth)
-                    .height(420.dp)
-                    .background(
-                        Color.Black.copy(alpha = 0.92f),
-                        RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp)
-                    )
-                    .clickable { isMenuOpen = !isMenuOpen }
-                    .padding(8.dp)
-            ) {
-                if (isMenuOpen) {
-                    // เมนูเปิด - แสดงตัวเลือกทั้งหมด
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(12.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        // Header
-                        Text(
-                            text = "🎯 Aether Dev v0.2",
-                            color = Color.Cyan,
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Text(
-                            text = "CoordinateMapper Active",
-                            color = Color.Gray,
-                            style = MaterialTheme.typography.labelSmall
-                        )
-                        
-                        HorizontalDivider(color = Color.Gray.copy(alpha = 0.3f))
-                        
-                        // === TOGGLE SWITCHES ===
-                        
-                        ToggleRow(
-                            label = "🔮 Aim Line",
-                            checked = showAimLine,
-                            onCheckedChange = { showAimLine = it }
-                        )
-                        
-                        ToggleRow(
-                            label = "⚪ Ball Markers",
-                            checked = showBallMarkers,
-                            onCheckedChange = { showBallMarkers = it }
-                        )
-                        
-                        ToggleRow(
-                            label = "👻 Ghost Ball",
-                            checked = showGhostBall,
-                            onCheckedChange = { showGhostBall = it }
-                        )
-                        
-                        ToggleRow(
-                            label = "💪 Power Bar",
-                            checked = showPowerBar,
-                            onCheckedChange = { showPowerBar = it }
-                        )
-                        
-                        HorizontalDivider(color = Color.Gray.copy(alpha = 0.3f))
-                        
-                        // Ball Positions (ใช้ BallPosition)
-                        Text(
-                            text = "📍 Ball Positions (Normalized)",
-                            color = Color.White,
-                            style = MaterialTheme.typography.labelMedium
-                        )
-                        
-                        mockBalls.forEach { ball ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = "Ball ${ball.id}:",
-                                    color = if (ball.isCue) Color.White else Color.Yellow,
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                                Text(
-                                    text = "(${String.format("%.3f", ball.normX)}, ${String.format("%.3f", ball.normY)})",
-                                    color = Color.Gray,
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                        }
-                        
-                        // Trajectory Info
-                        val trajDist = CoordinateMapper.distance(
-                            mockTrajectory.startX, mockTrajectory.startY,
-                            mockTrajectory.endX, mockTrajectory.endY
-                        )
-                        val trajAngle = CoordinateMapper.angleBetween(
-                            mockTrajectory.startX, mockTrajectory.startY,
-                            mockTrajectory.endX, mockTrajectory.endY
-                        )
-                        
-                        Text(
-                            text = "📏 Trajectory: ${String.format("%.2f", trajDist * 100)}%",
-                            color = Color.Cyan,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                        Text(
-                            text = "📐 Angle: ${String.format("%.1f", trajAngle)}°",
-                            color = Color.Cyan,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                        
-                        Spacer(modifier = Modifier.weight(1f))
-                        
-                        // Footer
-                        Text(
-                            text = "Tap to close",
-                            color = Color.Gray,
-                            style = MaterialTheme.typography.labelSmall
-                        )
-                    }
-                } else {
-                    // เมนูปิด - แสดงไอคอนเท่านั้น
-                    Icon(
-                        imageVector = Icons.Default.Menu,
-                        contentDescription = "Open Menu",
-                        tint = Color.White,
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .size(32.dp)
-                    )
-                }
-            }
         }
     }
 
-    /**
-     * Toggle Row Component
-     */
-    @Composable
-    private fun ToggleRow(
-        label: String,
-        checked: Boolean,
-        onCheckedChange: (Boolean) -> Unit
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = label,
-                color = Color.White,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f)
-            )
-            Switch(
-                checked = checked,
-                onCheckedChange = onCheckedChange,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = Color.Cyan,
-                    checkedTrackColor = Color.Cyan.copy(alpha = 0.5f)
-                )
-            )
+    // ========================================================================
+    // MENU WINDOW LAYOUT PARAMS (Floating Menu - touchable, top-end corner)
+    // ========================================================================
+
+    private fun createMenuLayoutParams(): android.view.WindowManager.LayoutParams {
+        return android.view.WindowManager.LayoutParams(
+            android.view.WindowManager.LayoutParams.WRAP_CONTENT,
+            android.view.WindowManager.LayoutParams.WRAP_CONTENT,
+            android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = android.view.Gravity.TOP or android.view.Gravity.END
+            x = 24
+            y = 180
         }
     }
 }
