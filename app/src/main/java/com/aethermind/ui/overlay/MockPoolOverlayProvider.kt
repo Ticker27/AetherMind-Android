@@ -14,12 +14,7 @@ object MockPoolOverlayProvider {
         showAimGuide: Boolean,
         showVisionMarkers: Boolean,
         showDebugLabels: Boolean,
-        aiSkillLevel: AiSkillLevel = AiSkillLevel.INTERMEDIATE,
-        autoPlayEnabled: Boolean = false,
-        autoPlayArmed: Boolean = false,
-        autoPlayStatus: String = if (autoPlayEnabled) "ARMED" else "OFF",
-        autoPlayIntervalMs: Int = 1200,
-        autoPlayPowerPx: Float = 420f
+        aiSkillLevel: AiSkillLevel = AiSkillLevel.INTERMEDIATE
     ): OverlayUiState {
         val w = width.toFloat().coerceAtLeast(1f)
         val h = height.toFloat().coerceAtLeast(1f)
@@ -97,11 +92,6 @@ object MockPoolOverlayProvider {
 
         return OverlayUiState(
             aiSkillLevel = aiSkillLevel,
-            autoPlayEnabled = autoPlayEnabled,
-            autoPlayArmed = autoPlayArmed,
-            autoPlayStatus = autoPlayStatus,
-            autoPlayIntervalMs = autoPlayIntervalMs,
-            autoPlayPowerPx = autoPlayPowerPx,
             showHud = showHud,
             showAimGuide = showAimGuide,
             showVisionMarkers = showVisionMarkers,
@@ -113,7 +103,7 @@ object MockPoolOverlayProvider {
             targetBall = target,
             balls = balls,
             trajectory = trajectory,
-            modeLabel = if (autoPlayEnabled) "AUTO PLAY" else "PROPOSE ONLY"
+            modeLabel = "PROPOSE ONLY"
         )
     }
 

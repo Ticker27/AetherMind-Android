@@ -22,7 +22,6 @@ constexpr std::uint32_t FLAG_AUTHORIZED_EXECUTION = 0x00000800U;
 constexpr std::uint32_t FLAG_TELEMETRY_ONLY = 0x00001000U;
 constexpr std::uint32_t FLAG_AI_ACTIVE = 0x00002000U;
 constexpr std::uint32_t FLAG_HUD_VISIBLE = 0x00004000U;
-constexpr std::uint32_t FLAG_AUTO_PLAY_ENABLED = 0x00008000U;
 constexpr std::uint32_t FLAG_INTENT_SHIFT = 24U;
 constexpr std::uint32_t FLAG_INTENT_MASK = 0x03000000U;
 
@@ -31,22 +30,15 @@ constexpr std::int32_t TOUCH_ACTION_DOWN = 0;
 constexpr std::uint64_t DOUBLE_TAP_WINDOW_NANOS = 300000000ULL;
 constexpr float CENTER_TAP_RADIUS_RATIO = 0.18f;
 
-struct AutoPlayPolicy final {
-    std::int32_t intervalMs;
-    float swipePowerPx;
-};
-
 struct RuntimeSwitchState {
     std::atomic<bool> hudVisible;
     std::atomic<bool> aiActive;
-    std::atomic<bool> autoPlayEnabled;
     std::atomic<int> skillLevel;
     std::atomic<std::uint64_t> lastCenterTapNanos;
 
     RuntimeSwitchState() noexcept
         : hudVisible(true),
           aiActive(true),
-          autoPlayEnabled(false),
           skillLevel(static_cast<int>(SkillLevel::Intermediate)),
           lastCenterTapNanos(0ULL) {}
 };
@@ -71,23 +63,6 @@ SkillLevel sanitizeSkillLevel(int rawLevel) noexcept {
     }
 
     return SkillLevel::Intermediate;
-}
-
-AutoPlayPolicy autoPlayPolicyForSkill(SkillLevel level) noexcept {
-    switch (level) {
-        case SkillLevel::Beginner:
-            // Slow and gentle. Useful for training or first-pass verification.
-            return AutoPlayPolicy{1800, 320.0f};
-
-        case SkillLevel::Advanced:
-            // Faster cadence and stronger pull distance for confident shots.
-            return AutoPlayPolicy{750, 650.0f};
-
-        case SkillLevel::Intermediate:
-        default:
-            // Balanced default.
-            return AutoPlayPolicy{1200, 480.0f};
-    }
 }
 
 SkillProfile runtimeSkillProfile() noexcept {
@@ -304,9 +279,6 @@ IntegrationLoopResult IntegrationLoop::classifyOnlyFrame(
     if (switches.aiActive.load(std::memory_order_relaxed)) {
         result.executionState.flags |= FLAG_AI_ACTIVE;
     }
-    if (switches.autoPlayEnabled.load(std::memory_order_relaxed)) {
-        result.executionState.flags |= FLAG_AUTO_PLAY_ENABLED;
-    }
 
     return result;
 }
@@ -344,9 +316,6 @@ IntegrationLoopResult IntegrationLoop::executeAutoPlayFrame(
         if (aiActive) {
             result.executionState.flags |= FLAG_AI_ACTIVE;
         }
-        if (switches.autoPlayEnabled.load(std::memory_order_relaxed)) {
-            result.executionState.flags |= FLAG_AUTO_PLAY_ENABLED;
-        }
         result.executed = false;
         globalTrajectoryBridge().publishState(result.executionState);
         return result;
@@ -377,9 +346,6 @@ IntegrationLoopResult IntegrationLoop::executeAutoPlayFrame(
     result.executionState.flags |= FLAG_INTEGRATION_LOOP;
     result.executionState.flags |= FLAG_AUTHORIZED_EXECUTION;
     result.executionState.flags |= FLAG_AI_ACTIVE;
-    if (switches.autoPlayEnabled.load(std::memory_order_relaxed)) {
-        result.executionState.flags |= FLAG_AUTO_PLAY_ENABLED;
-    }
     if (hudVisible) {
         result.executionState.flags |= FLAG_HUD_VISIBLE;
     }
@@ -458,28 +424,6 @@ bool integrationLoopSetSkillLevel(int rawLevel) noexcept {
     return true;
 }
 
-
-bool integrationLoopAutoPlayEnabled() noexcept {
-    return runtimeSwitchState().autoPlayEnabled.load(std::memory_order_relaxed);
-}
-
-bool integrationLoopSetAutoPlayEnabled(bool enabled) noexcept {
-    runtimeSwitchState().autoPlayEnabled.store(enabled, std::memory_order_relaxed);
-    return true;
-}
-
-std::int32_t integrationLoopAutoPlayIntervalMs() noexcept {
-    const int rawLevel = runtimeSwitchState().skillLevel.load(std::memory_order_relaxed);
-    const AutoPlayPolicy policy = autoPlayPolicyForSkill(sanitizeSkillLevel(rawLevel));
-    return policy.intervalMs;
-}
-
-float integrationLoopAutoPlaySwipePowerPx() noexcept {
-    const int rawLevel = runtimeSwitchState().skillLevel.load(std::memory_order_relaxed);
-    const AutoPlayPolicy policy = autoPlayPolicyForSkill(sanitizeSkillLevel(rawLevel));
-    return policy.swipePowerPx;
-}
-
 } // namespace aether
 
 #if defined(AETHER_ENABLE_INTEGRATION_JNI)
@@ -552,42 +496,6 @@ Java_com_aether_renderer_AetherIntegrationLoop_nativeSetSkillLevel(
     return aether::integrationLoopSetSkillLevel(static_cast<int>(level))
         ? JNI_TRUE
         : JNI_FALSE;
-}
-
-
-extern "C" JNIEXPORT jboolean JNICALL
-Java_com_aether_renderer_AetherIntegrationLoop_nativeAutoPlayEnabled(
-    JNIEnv*,
-    jclass
-) {
-    return aether::integrationLoopAutoPlayEnabled() ? JNI_TRUE : JNI_FALSE;
-}
-
-extern "C" JNIEXPORT jboolean JNICALL
-Java_com_aether_renderer_AetherIntegrationLoop_nativeSetAutoPlayEnabled(
-    JNIEnv*,
-    jclass,
-    jboolean enabled
-) {
-    return aether::integrationLoopSetAutoPlayEnabled(enabled == JNI_TRUE)
-        ? JNI_TRUE
-        : JNI_FALSE;
-}
-
-extern "C" JNIEXPORT jint JNICALL
-Java_com_aether_renderer_AetherIntegrationLoop_nativeAutoPlayIntervalMs(
-    JNIEnv*,
-    jclass
-) {
-    return static_cast<jint>(aether::integrationLoopAutoPlayIntervalMs());
-}
-
-extern "C" JNIEXPORT jfloat JNICALL
-Java_com_aether_renderer_AetherIntegrationLoop_nativeAutoPlaySwipePowerPx(
-    JNIEnv*,
-    jclass
-) {
-    return static_cast<jfloat>(aether::integrationLoopAutoPlaySwipePowerPx());
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
