@@ -60,6 +60,22 @@ object AetherIntegrationLoop {
 
     external fun nativeAutoPlaySwipePowerPx(): Float
 
+    external fun nativeSetAccessibilitySnapshot(
+        sequence: Long,
+        packageName: String,
+        className: String,
+        nodeCount: Int,
+        clickableCount: Int,
+        textCount: Int,
+        maxDepth: Int,
+        eventType: Int,
+        timestampMs: Long
+    ): Boolean
+
+    external fun nativeGetAccessibilityHandshakeStatus(): String
+
+    external fun nativeGetNativeBridgeHealth(): String
+
     fun initializeAetherNative(): Boolean {
         val stateSize = NativeTrajectoryBridge.nativeStateSize()
         val layoutVersion = NativeTrajectoryBridge.nativeStateLayoutVersion()

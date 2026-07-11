@@ -1,8 +1,12 @@
 #include "aether/runtime/IntegrationLoop.h"
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <cstring>
+#include <mutex>
+#include <sstream>
+#include <string>
 
 #include "aether/humanizer/Humanizer.h"
 #include "aether/planning/CemPlanner.h"
@@ -11,6 +15,7 @@
 
 #if defined(AETHER_ENABLE_INTEGRATION_JNI)
 #include <jni.h>
+#include <android/log.h>
 #endif
 
 namespace aether {
@@ -36,6 +41,28 @@ struct AutoPlayPolicy final {
     float swipePowerPx;
 };
 
+struct AccessibilitySnapshotState {
+    std::uint64_t sequence = 0ULL;
+
+    std::string packageName;
+    std::string className;
+
+    int nodeCount = 0;
+    int clickableCount = 0;
+    int textCount = 0;
+    int maxDepth = 0;
+
+    int eventType = 0;
+    std::int64_t timestampMs = 0;
+    std::int64_t receivedAtMs = 0;
+
+    bool hasSnapshot = false;
+    bool lastUpdateOk = false;
+};
+
+static std::mutex g_eyeMutex;
+static AccessibilitySnapshotState g_eyeState;
+
 struct RuntimeSwitchState {
     std::atomic<bool> hudVisible;
     std::atomic<bool> aiActive;
@@ -50,6 +77,28 @@ struct RuntimeSwitchState {
           skillLevel(static_cast<int>(SkillLevel::Intermediate)),
           lastCenterTapNanos(0ULL) {}
 };
+
+std::int64_t nowUnixMs() noexcept {
+    using Clock = std::chrono::system_clock;
+    return static_cast<std::int64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            Clock::now().time_since_epoch()
+        ).count()
+    );
+}
+
+const char* eyeStatusForAge(bool hasSnapshot, std::int64_t ageMs) noexcept {
+    if (!hasSnapshot) {
+        return "NO_SNAPSHOT";
+    }
+    if (ageMs <= 1000) {
+        return "ACTIVE";
+    }
+    if (ageMs <= 3000) {
+        return "IDLE";
+    }
+    return "STALE";
+}
 
 RuntimeSwitchState& runtimeSwitchState() noexcept {
     static RuntimeSwitchState state;
@@ -480,6 +529,99 @@ float integrationLoopAutoPlaySwipePowerPx() noexcept {
     return policy.swipePowerPx;
 }
 
+bool integrationLoopSetAccessibilitySnapshot(
+    std::uint64_t sequence,
+    const std::string& packageName,
+    const std::string& className,
+    int nodeCount,
+    int clickableCount,
+    int textCount,
+    int maxDepth,
+    int eventType,
+    std::int64_t timestampMs
+) noexcept {
+    AccessibilitySnapshotState next;
+    next.sequence = sequence;
+    next.packageName = packageName;
+    next.className = className;
+    next.nodeCount = nodeCount < 0 ? 0 : nodeCount;
+    next.clickableCount = clickableCount < 0 ? 0 : clickableCount;
+    next.textCount = textCount < 0 ? 0 : textCount;
+    next.maxDepth = maxDepth < 0 ? 0 : maxDepth;
+    next.eventType = eventType;
+    next.timestampMs = timestampMs;
+    next.receivedAtMs = nowUnixMs();
+    next.hasSnapshot = true;
+    next.lastUpdateOk = true;
+
+    {
+        std::lock_guard<std::mutex> lock(g_eyeMutex);
+        g_eyeState = next;
+    }
+
+#if defined(AETHER_ENABLE_INTEGRATION_JNI)
+    __android_log_print(
+        ANDROID_LOG_INFO,
+        "AetherBridge",
+        "health=OK eye=%s age=0ms",
+        eyeStatusForAge(true, 0)
+    );
+#endif
+    return true;
+}
+
+std::string integrationLoopAccessibilityHandshakeStatus() {
+    AccessibilitySnapshotState snapshot;
+    {
+        std::lock_guard<std::mutex> lock(g_eyeMutex);
+        snapshot = g_eyeState;
+    }
+
+    if (!snapshot.hasSnapshot) {
+        return "Eye Link: NO_SNAPSHOT";
+    }
+
+    const std::int64_t ageMs = nowUnixMs() - snapshot.receivedAtMs;
+    std::ostringstream out;
+    out << "Eye Link: seq=" << snapshot.sequence
+        << " pkg=" << snapshot.packageName
+        << " cls=" << snapshot.className
+        << " nodes=" << snapshot.nodeCount
+        << " click=" << snapshot.clickableCount
+        << " text=" << snapshot.textCount
+        << " depth=" << snapshot.maxDepth
+        << " age=" << ageMs << "ms"
+        << " event=" << snapshot.eventType
+        << " status=" << eyeStatusForAge(true, ageMs);
+    return out.str();
+}
+
+std::string integrationLoopNativeBridgeHealth() {
+    AccessibilitySnapshotState snapshot;
+    {
+        std::lock_guard<std::mutex> lock(g_eyeMutex);
+        snapshot = g_eyeState;
+    }
+
+    const std::int64_t ageMs = snapshot.hasSnapshot ? nowUnixMs() - snapshot.receivedAtMs : 0;
+    const char* eye = eyeStatusForAge(snapshot.hasSnapshot, ageMs);
+
+    std::ostringstream out;
+    out << "Native Bridge: OK | Eye=" << eye
+        << " | Exec=LOCKED | Mode=PROPOSE_ONLY";
+
+#if defined(AETHER_ENABLE_INTEGRATION_JNI)
+    __android_log_print(
+        ANDROID_LOG_INFO,
+        "AetherBridge",
+        "health=OK eye=%s age=%lldms",
+        eye,
+        static_cast<long long>(ageMs)
+    );
+#endif
+    return out.str();
+}
+
 } // namespace aether
 
 #if defined(AETHER_ENABLE_INTEGRATION_JNI)
@@ -588,6 +730,68 @@ Java_com_aether_renderer_AetherIntegrationLoop_nativeAutoPlaySwipePowerPx(
     jclass
 ) {
     return static_cast<jfloat>(aether::integrationLoopAutoPlaySwipePowerPx());
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_aether_renderer_AetherIntegrationLoop_nativeSetAccessibilitySnapshot(
+    JNIEnv* env,
+    jclass,
+    jlong sequence,
+    jstring packageName,
+    jstring className,
+    jint nodeCount,
+    jint clickableCount,
+    jint textCount,
+    jint maxDepth,
+    jint eventType,
+    jlong timestampMs
+) {
+    const char* packageChars = packageName != nullptr
+        ? env->GetStringUTFChars(packageName, nullptr)
+        : nullptr;
+    const char* classChars = className != nullptr
+        ? env->GetStringUTFChars(className, nullptr)
+        : nullptr;
+
+    const std::string packageValue = packageChars != nullptr ? packageChars : "";
+    const std::string classValue = classChars != nullptr ? classChars : "";
+
+    if (packageChars != nullptr) {
+        env->ReleaseStringUTFChars(packageName, packageChars);
+    }
+    if (classChars != nullptr) {
+        env->ReleaseStringUTFChars(className, classChars);
+    }
+
+    return aether::integrationLoopSetAccessibilitySnapshot(
+        static_cast<std::uint64_t>(sequence),
+        packageValue,
+        classValue,
+        static_cast<int>(nodeCount),
+        static_cast<int>(clickableCount),
+        static_cast<int>(textCount),
+        static_cast<int>(maxDepth),
+        static_cast<int>(eventType),
+        static_cast<std::int64_t>(timestampMs)
+    ) ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_aether_renderer_AetherIntegrationLoop_nativeGetAccessibilityHandshakeStatus(
+    JNIEnv* env,
+    jclass
+) {
+    const std::string status = aether::integrationLoopAccessibilityHandshakeStatus();
+    return env->NewStringUTF(status.c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_aether_renderer_AetherIntegrationLoop_nativeGetNativeBridgeHealth(
+    JNIEnv* env,
+    jclass
+) {
+    const std::string health = aether::integrationLoopNativeBridgeHealth();
+    return env->NewStringUTF(health.c_str());
 }
 
 extern "C" JNIEXPORT jboolean JNICALL

@@ -14,6 +14,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.provider.Settings
+import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -51,7 +52,6 @@ class AetherDevOverlayService : Service() {
         const val ACTION_START_OVERLAY = "com.aethermind.ui.action.START_OVERLAY"
         const val ACTION_STOP_OVERLAY = "com.aethermind.ui.action.STOP_OVERLAY"
         const val ACTION_TOGGLE_MENU = "com.aethermind.ui.action.TOGGLE_MENU"
-        const val FRAME_DELAY_MS = 33L
     }
 
     private var windowManager: WindowManager? = null
@@ -80,6 +80,9 @@ class AetherDevOverlayService : Service() {
     private var visionText: TextView? = null
     private var autoText: TextView? = null
     private var skillText: TextView? = null
+    private var bridgeText: TextView? = null
+    private var eyeText: TextView? = null
+    private var lastBridgeLogLine: String? = null
     private var hudButton: Button? = null
     private var aimButton: Button? = null
     private var visionButton: Button? = null
@@ -210,6 +213,8 @@ class AetherDevOverlayService : Service() {
         visionText = label("Vision: mock / FPS 30", 13f, Color.rgb(220, 230, 255), false)
         skillText = label("AI Skill: Smart", 13f, Color.rgb(255, 205, 90), false)
         autoText = label("Auto Play: OFF", 13f, Color.rgb(150, 170, 210), false)
+        bridgeText = label("Native Bridge: STARTING", 12f, Color.rgb(120, 235, 255), false)
+        eyeText = diagnosticLabel("Eye Link: NO_SNAPSHOT", 11f, Color.rgb(180, 220, 255))
 
         root.addView(titleText)
         root.addView(modeText)
@@ -218,6 +223,9 @@ class AetherDevOverlayService : Service() {
         root.addView(visionText)
         root.addView(skillText)
         root.addView(autoText)
+        root.addView(space(4))
+        root.addView(bridgeText)
+        root.addView(eyeText)
         root.addView(space(10))
 
         val row1 = row()
@@ -333,6 +341,17 @@ class AetherDevOverlayService : Service() {
         }
     }
 
+    private fun diagnosticLabel(text: String, sp: Float, color: Int): TextView {
+        return TextView(this).apply {
+            this.text = text
+            textSize = sp
+            setTextColor(color)
+            includeFontPadding = true
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }
+    }
+
     private fun button(text: String, action: () -> Unit): Button {
         return Button(this).apply {
             this.text = text
@@ -434,6 +453,11 @@ class AetherDevOverlayService : Service() {
         visionText?.text = "Vision: ${if (showVisionMarkers) "mock" else "hidden"} / balls=${overlayState.ballCount} / ${overlayState.fps} FPS"
         skillText?.text = "AI Skill: ${overlayState.aiSkillLabel}"
         autoText?.text = "Auto Play: ${overlayState.autoPlayStatus} / ${overlayState.autoPlayIntervalMs}ms / ${overlayState.autoPlayPowerPx.toInt()}px"
+        val bridgeHealth = readNativeBridgeHealth()
+        val eyeStatus = readNativeEyeLinkStatus()
+        bridgeText?.text = bridgeHealth
+        eyeText?.text = eyeStatus
+        logBridgeDiagnostics(bridgeHealth, eyeStatus)
         hudButton?.text = if (showHud) "HUD ON" else "HUD OFF"
         aimButton?.text = if (showAimGuide) "Aim ON" else "Aim OFF"
         visionButton?.text = if (showVisionMarkers) "Vision ON" else "Vision OFF"
@@ -479,6 +503,24 @@ class AetherDevOverlayService : Service() {
     private fun readNativeAutoPlayPowerPx(): Float {
         return runCatching { AetherIntegrationLoop.nativeAutoPlaySwipePowerPx() }
             .getOrDefault(420f)
+    }
+
+    private fun readNativeBridgeHealth(): String {
+        return runCatching { AetherIntegrationLoop.nativeGetNativeBridgeHealth() }
+            .getOrDefault("Native Bridge: ERROR | Eye=UNKNOWN | Exec=LOCKED | Mode=PROPOSE_ONLY")
+    }
+
+    private fun readNativeEyeLinkStatus(): String {
+        return runCatching { AetherIntegrationLoop.nativeGetAccessibilityHandshakeStatus() }
+            .getOrDefault("Eye Link: ERROR")
+    }
+
+    private fun logBridgeDiagnostics(bridgeHealth: String, eyeStatus: String) {
+        val line = "$bridgeHealth | $eyeStatus"
+        if (line != lastBridgeLogLine) {
+            Log.i("AetherBridge", line)
+            lastBridgeLogLine = line
+        }
     }
 
     private fun toggleAutoPlay() {
@@ -594,5 +636,9 @@ class AetherDevOverlayService : Service() {
             canvas.drawText("AE overlay mock / balls=${s.ballCount} / skill=${s.aiSkillShortLabel}", 28f, 52f, textPaint)
             canvas.drawText("auto=${s.autoPlayStatus} / ${s.autoPlayIntervalMs}ms", 28f, 86f, textPaint)
         }
+    }
+
+    private companion object {
+        const val FRAME_DELAY_MS = 33L
     }
 }
