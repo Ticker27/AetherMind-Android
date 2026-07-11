@@ -16,12 +16,10 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
-import androidx.lifecycle.ViewTreeViewModelStoreOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
-import androidx.savedstate.ViewTreeSavedStateRegistryOwner
 import com.aether.renderer.AetherIntegrationLoop
 import com.aethermind.execution.AutoPlayController
 import com.aethermind.ui.overlay.AetherAimCanvas
@@ -186,8 +184,6 @@ class AetherDevOverlayService : LifecycleService(), SavedStateRegistryOwner, Vie
 
     private fun ComposeView.installComposeOwners() {
         setViewTreeLifecycleOwner(this@AetherDevOverlayService)
-        ViewTreeViewModelStoreOwner.set(this, this@AetherDevOverlayService)
-        ViewTreeSavedStateRegistryOwner.set(this, this@AetherDevOverlayService)
     }
 
     private fun createCanvasLayoutParams(): WindowManager.LayoutParams {
