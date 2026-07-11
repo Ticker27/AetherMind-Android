@@ -2,144 +2,103 @@ package com.aethermind.ui
 
 import android.content.Intent
 import android.graphics.PixelFormat
+import android.os.Handler
 import android.os.IBinder
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.platform.ComposeView
+import android.os.Looper
+import android.provider.Settings
+import android.view.Gravity
+import android.view.WindowManager
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.LifecycleService
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.ViewTreeViewModelStoreOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.savedstate.SavedStateRegistry
+import androidx.savedstate.SavedStateRegistryController
+import androidx.savedstate.SavedStateRegistryOwner
+import androidx.savedstate.ViewTreeSavedStateRegistryOwner
+import com.aether.renderer.AetherIntegrationLoop
+import com.aethermind.ui.overlay.AetherAimCanvas
+import com.aethermind.ui.overlay.AiSkillLevel
+import com.aethermind.ui.overlay.MockPoolOverlayProvider
+import com.aethermind.ui.overlay.OverlayUiState
 
 /**
- * Aether Developer Overlay Service
+ * Real-time pool overlay service.
  *
- * Pool Game Overlay จากคลิปอ้างอิง - 2 Windows Overlay System:
+ * The service intentionally owns two independent application-overlay windows:
  *
- * AetherDevOverlayService
- * ├── Canvas Overlay Window (MATCH_PARENT, FLAG_NOT_TOUCHABLE)
- * │   ├── วาดเส้น aim / trajectory (AetherAimCanvas)
- * │   ├── วาดวงกลม cue marker
- * │   ├── วาด pocket target / collision point
- * │   └── ไม่รับ touch เพื่อไม่บังเกม
- * │
- * └── Floating Menu Window (WRAP_CONTENT, รับ touch)
- *     ├── Mini Bubble: AE 91%
- *     ├── Expanded Menu: Vision / HUD / Aim / Debug
- *     └── รับ touch เฉพาะตัวเมนู
+ * 1. Canvas window: full screen, translucent, not touchable. It draws aim lines,
+ *    ghost ball, collision markers, rebound lines, and vision markers without
+ *    stealing input from the game below it.
  *
- * Shared state (PoolOverlayState) ใช้ MutableState ร่วมกันระหว่าง 2 ComposeView
- * ผ่าน global snapshot ของ Compose → กดปุ่มในเมนูจะอัปเดต Canvas ทันที
+ * 2. Floating menu window: wrap-content and touchable. It controls which visual
+ *    layers are visible and can be dragged without making the full screen overlay
+ *    consume touch events.
+ *
+ * Execution remains locked. This layer is visual/propose-only and does not send
+ * gestures or taps.
  */
-class AetherDevOverlayService : LifecycleService() {
+class AetherDevOverlayService : LifecycleService(), SavedStateRegistryOwner, ViewModelStoreOwner {
 
-    private var windowManager: android.view.WindowManager? = null
+    private val savedStateController by lazy { SavedStateRegistryController.create(this) }
+    private val serviceViewModelStore = ViewModelStore()
+
+    override val savedStateRegistry: SavedStateRegistry
+        get() = savedStateController.savedStateRegistry
+
+    override val viewModelStore: ViewModelStore
+        get() = serviceViewModelStore
+
+    private var windowManager: WindowManager? = null
     private var canvasView: ComposeView? = null
     private var menuView: ComposeView? = null
+    private var menuParams: WindowManager.LayoutParams? = null
 
-    // Shared UI state - observable across both ComposeView windows (global snapshot)
-    private val overlayState = PoolOverlayState()
+    private val handler = Handler(Looper.getMainLooper())
+    private var tickerRunning = false
 
-    // ========================================================================
-    // LIFECYCLE
-    // ========================================================================
+    private var showHud = true
+    private var showAimGuide = true
+    private var showVisionMarkers = true
+    private var showDebugLabels = false
+    private var aiSkillLevel = AiSkillLevel.INTERMEDIATE
+
+    private var overlayState by mutableStateOf(OverlayUiState())
+
+    private val frameTicker = object : Runnable {
+        override fun run() {
+            if (!tickerRunning) return
+            updateMockOverlayState()
+            handler.postDelayed(this, FRAME_DELAY_MS)
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
-        windowManager = getSystemService(WINDOW_SERVICE) as android.view.WindowManager
 
-        // ====================================================================
-        // 1. Canvas Overlay Window - ทับเกม ไม่รับ touch (FLAG_NOT_TOUCHABLE)
-        // ====================================================================
-        val canvasParams = android.view.WindowManager.LayoutParams(
-            android.view.WindowManager.LayoutParams.MATCH_PARENT,
-            android.view.WindowManager.LayoutParams.MATCH_PARENT,
-            android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-            android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-            android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            PixelFormat.TRANSLUCENT
-        )
+        savedStateController.performAttach()
+        savedStateController.performRestore(null)
 
-        canvasView = ComposeView(this).apply {
-            setViewTreeLifecycleOwner(this@AetherDevOverlayService)
-            setContent {
-                AetherAimCanvas(
-                    trajectory = overlayState.trajectory.value,
-                    showCanvasOverlay = overlayState.showCanvasOverlay.value,
-                    showAimGuide = overlayState.showAimGuide.value,
-                    showReboundLines = overlayState.showReboundLines.value,
-                    showCollisionMarkers = overlayState.showCollisionMarkers.value,
-                    showBallMarkers = overlayState.showBallMarkers.value,
-                    showDebug = overlayState.showDebug.value
-                )
-            }
-        }
+        windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        aiSkillLevel = readNativeSkillLevel()
+        overlayState = createInitialState()
 
-        windowManager?.addView(canvasView, canvasParams)
-
-        // ====================================================================
-        // 2. Floating Menu Window - ลอยมุมขวาบน รับ touch ได้
-        // ====================================================================
-        menuView = ComposeView(this).apply {
-            setViewTreeLifecycleOwner(this@AetherDevOverlayService)
-            setContent {
-                MaterialTheme {
-                    AetherFloatingMenuRoot(
-                        state = FloatingMenuState(
-                            engineStatus = EngineStatus.Ready,
-                            visionActive = true,
-                            overlayVisible = overlayState.showCanvasOverlay.value,
-                            trajectoryReady = true,
-                            executionLocked = true,
-                            fps = 30,
-                            ballCount = overlayState.ballCount.value,
-                            confidence = overlayState.confidence.value,
-                            targetLabel = "Yellow Ball",
-                            modeLabel = "PROPOSE ONLY"
-                        ),
-                        onClose = {
-                            stopSelf()
-                        },
-                        onHideHud = {
-                            // HUD = toggle canvas overlay
-                            overlayState.showCanvasOverlay.value = !overlayState.showCanvasOverlay.value
-                        },
-                        onReset = {
-                            // Reset = reset mock trajectory
-                            overlayState.resetTrajectory()
-                        },
-                        onOpenPermissions = {
-                            // TODO: open settings screen
-                        },
-                        onToggleVision = {
-                            // Vision = toggle mock ball markers
-                            overlayState.showBallMarkers.value = !overlayState.showBallMarkers.value
-                        },
-                        onToggleHud = {
-                            // HUD = toggle canvas overlay
-                            overlayState.showCanvasOverlay.value = !overlayState.showCanvasOverlay.value
-                        },
-                        onToggleAim = {
-                            // Aim = toggle aim guide
-                            overlayState.showAimGuide.value = !overlayState.showAimGuide.value
-                        },
-                        onToggleDebug = {
-                            // Debug = toggle debug labels
-                            overlayState.showDebug.value = !overlayState.showDebug.value
-                        }
-                    )
-                }
-            }
-        }
-
-        windowManager?.addView(menuView, createMenuLayoutParams())
+        createCanvasWindow()
+        createMenuWindow()
+        startTicker()
     }
 
     override fun onDestroy() {
+        stopTicker()
+        removeOverlayViews()
+        serviceViewModelStore.clear()
         super.onDestroy()
-        canvasView?.let { windowManager?.removeView(it) }
-        menuView?.let { windowManager?.removeView(it) }
-        canvasView = null
-        menuView = null
     }
 
     override fun onBind(intent: Intent): IBinder? {
@@ -147,43 +106,203 @@ class AetherDevOverlayService : LifecycleService() {
         return null
     }
 
-    // ========================================================================
-    // SHARED OVERLAY STATE
-    // ========================================================================
+    private fun createCanvasWindow() {
+        val params = createCanvasLayoutParams()
+        canvasView = ComposeView(this).apply {
+            installComposeOwners()
+            setContent {
+                MaterialTheme {
+                    AetherAimCanvas(state = overlayState)
+                }
+            }
+        }
+        windowManager?.addView(canvasView, params)
+    }
 
-    class PoolOverlayState {
-        val showCanvasOverlay = mutableStateOf(true)
-        val showAimGuide = mutableStateOf(true)
-        val showReboundLines = mutableStateOf(true)
-        val showCollisionMarkers = mutableStateOf(true)
-        val showBallMarkers = mutableStateOf(true)
-        val showDebug = mutableStateOf(false)
-        val showFloatingMenu = mutableStateOf(true)
-        val confidence = mutableStateOf(91)
-        val ballCount = mutableStateOf(8)
-        val trajectory = mutableStateOf(buildMockTrajectory())
+    private fun createMenuWindow() {
+        val params = createMenuLayoutParams()
+        menuParams = params
+        menuView = ComposeView(this).apply {
+            installComposeOwners()
+            setContent {
+                MaterialTheme {
+                    AetherFloatingMenuRoot(
+                        state = overlayState,
+                        engineStatus = EngineStatus.Ready,
+                        onClose = { stopSelf() },
+                        onHideHud = {
+                            showHud = false
+                            publishStateNow()
+                        },
+                        onReset = {
+                            showHud = true
+                            showAimGuide = true
+                            showVisionMarkers = true
+                            showDebugLabels = false
+                            publishStateNow()
+                        },
+                        onOpenPermissions = { openOverlaySettings() },
+                        onToggleVision = {
+                            showVisionMarkers = !showVisionMarkers
+                            publishStateNow()
+                        },
+                        onToggleHud = {
+                            showHud = !showHud
+                            publishStateNow()
+                        },
+                        onToggleAim = {
+                            showAimGuide = !showAimGuide
+                            publishStateNow()
+                        },
+                        onToggleDebug = {
+                            showDebugLabels = !showDebugLabels
+                            publishStateNow()
+                        },
+                        onSetAiSkillLevel = { level ->
+                            setAiSkillLevel(level)
+                        },
+                        onDrag = { dx, dy -> moveMenuWindow(dx, dy) }
+                    )
+                }
+            }
+        }
+        windowManager?.addView(menuView, params)
+    }
 
-        fun resetTrajectory() {
-            trajectory.value = buildMockTrajectory()
+    private fun ComposeView.installComposeOwners() {
+        setViewTreeLifecycleOwner(this@AetherDevOverlayService)
+        ViewTreeViewModelStoreOwner.set(this, this@AetherDevOverlayService)
+        ViewTreeSavedStateRegistryOwner.set(this, this@AetherDevOverlayService)
+    }
+
+    private fun createCanvasLayoutParams(): WindowManager.LayoutParams {
+        return WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
         }
     }
 
-    // ========================================================================
-    // MENU WINDOW LAYOUT PARAMS (Floating Menu - touchable, top-end corner)
-    // ========================================================================
-
-    private fun createMenuLayoutParams(): android.view.WindowManager.LayoutParams {
-        return android.view.WindowManager.LayoutParams(
-            android.view.WindowManager.LayoutParams.WRAP_CONTENT,
-            android.view.WindowManager.LayoutParams.WRAP_CONTENT,
-            android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+    private fun createMenuLayoutParams(): WindowManager.LayoutParams {
+        return WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = android.view.Gravity.TOP or android.view.Gravity.END
+            gravity = Gravity.TOP or Gravity.END
             x = 24
             y = 180
         }
+    }
+
+    private fun moveMenuWindow(dx: Float, dy: Float) {
+        val view = menuView ?: return
+        val params = menuParams ?: return
+
+        // With TOP|END gravity, positive x moves the window inward from the end
+        // edge. Dragging right should visually move toward the edge, therefore dx
+        // is subtracted while y follows the drag direction.
+        params.x = (params.x - dx.toInt()).coerceAtLeast(0)
+        params.y = (params.y + dy.toInt()).coerceAtLeast(0)
+
+        runCatching { windowManager?.updateViewLayout(view, params) }
+    }
+
+    private fun startTicker() {
+        tickerRunning = true
+        handler.removeCallbacks(frameTicker)
+        handler.post(frameTicker)
+    }
+
+    private fun stopTicker() {
+        tickerRunning = false
+        handler.removeCallbacks(frameTicker)
+    }
+
+    private fun publishStateNow() {
+        updateMockOverlayState()
+    }
+
+    private fun updateMockOverlayState() {
+        val metrics = resources.displayMetrics
+        overlayState = MockPoolOverlayProvider.generate(
+            width = metrics.widthPixels,
+            height = metrics.heightPixels,
+            timeMs = android.os.SystemClock.uptimeMillis(),
+            showHud = showHud,
+            showAimGuide = showAimGuide,
+            showVisionMarkers = showVisionMarkers,
+            showDebugLabels = showDebugLabels,
+            aiSkillLevel = aiSkillLevel
+        )
+    }
+
+    private fun createInitialState(): OverlayUiState {
+        val metrics = resources.displayMetrics
+        return MockPoolOverlayProvider.generate(
+            width = metrics.widthPixels,
+            height = metrics.heightPixels,
+            timeMs = android.os.SystemClock.uptimeMillis(),
+            showHud = showHud,
+            showAimGuide = showAimGuide,
+            showVisionMarkers = showVisionMarkers,
+            showDebugLabels = showDebugLabels,
+            aiSkillLevel = aiSkillLevel
+        )
+    }
+
+
+    private fun readNativeSkillLevel(): AiSkillLevel {
+        val nativeValue = runCatching { AetherIntegrationLoop.nativeSkillLevel() }
+            .getOrDefault(AiSkillLevel.INTERMEDIATE.nativeValue)
+        return AiSkillLevel.fromNativeValue(nativeValue)
+    }
+
+    private fun setAiSkillLevel(level: AiSkillLevel) {
+        val accepted = runCatching {
+            AetherIntegrationLoop.nativeSetSkillLevel(level.nativeValue)
+        }.getOrDefault(false)
+
+        aiSkillLevel = if (accepted) {
+            readNativeSkillLevel()
+        } else {
+            // Keep the UI responsive even if native loading failed in a preview or
+            // restricted environment. Real device builds should return true.
+            level
+        }
+
+        publishStateNow()
+    }
+
+    private fun openOverlaySettings() {
+        val intent = Intent(
+            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            android.net.Uri.parse("package:$packageName")
+        ).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        runCatching { startActivity(intent) }
+    }
+
+    private fun removeOverlayViews() {
+        val wm = windowManager
+        menuView?.let { view -> runCatching { wm?.removeView(view) } }
+        canvasView?.let { view -> runCatching { wm?.removeView(view) } }
+        menuView = null
+        canvasView = null
+        menuParams = null
+    }
+
+    private companion object {
+        const val FRAME_DELAY_MS = 33L
     }
 }

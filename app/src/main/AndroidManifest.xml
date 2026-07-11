@@ -20,8 +20,7 @@
         <!-- Aether Dev Overlay (Stub-Driven Development - Compose UI) -->
         <service
             android:name="com.aethermind.ui.AetherDevOverlayService"
-            android:exported="false"
-            android:foregroundServiceType="mediaPlayback" />
+            android:exported="false" />
 
         <!-- Phase 2 execution dispatcher service. Fully-qualified name is required because
              this class is in com.aethermind.execution while app namespace is com.aether.renderer.

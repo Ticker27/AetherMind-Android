@@ -1,7 +1,5 @@
 package com.aethermind.ui
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -12,22 +10,21 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Divider
-import androidx.compose.material3.Text
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,6 +35,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.aethermind.ui.overlay.AiSkillLevel
+import com.aethermind.ui.overlay.OverlayUiState
 
 enum class EngineStatus {
     Ready,
@@ -46,40 +45,37 @@ enum class EngineStatus {
     Error
 }
 
-data class FloatingMenuState(
-    val engineStatus: EngineStatus = EngineStatus.Ready,
-    val visionActive: Boolean = true,
-    val overlayVisible: Boolean = true,
-    val trajectoryReady: Boolean = true,
-    val executionLocked: Boolean = true,
-    val fps: Int = 30,
-    val ballCount: Int = 8,
-    val confidence: Int = 91,
-    val targetLabel: String = "Yellow Ball",
-    val modeLabel: String = "PROPOSE ONLY"
-)
-
 @Composable
 fun AetherFloatingMenuRoot(
-    state: FloatingMenuState,
+    state: OverlayUiState,
+    engineStatus: EngineStatus = EngineStatus.Ready,
     onClose: () -> Unit,
     onHideHud: () -> Unit,
     onReset: () -> Unit,
     onOpenPermissions: () -> Unit,
     onToggleVision: () -> Unit,
     onToggleHud: () -> Unit,
-    onToggleAim: () -> Unit = {},
-    onToggleDebug: () -> Unit = {}
+    onToggleAim: () -> Unit,
+    onToggleDebug: () -> Unit,
+    onSetAiSkillLevel: (AiSkillLevel) -> Unit,
+    onDrag: (dx: Float, dy: Float) -> Unit = { _, _ -> }
 ) {
     val expanded = remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
             .padding(12.dp)
+            .pointerInput(Unit) {
+                detectDragGestures { change, dragAmount ->
+                    change.consume()
+                    onDrag(dragAmount.x, dragAmount.y)
+                }
+            }
     ) {
         if (expanded.value) {
             ExpandedAetherMenu(
                 state = state,
+                engineStatus = engineStatus,
                 expanded = expanded,
                 onClose = onClose,
                 onHideHud = onHideHud,
@@ -88,11 +84,13 @@ fun AetherFloatingMenuRoot(
                 onToggleVision = onToggleVision,
                 onToggleHud = onToggleHud,
                 onToggleAim = onToggleAim,
-                onToggleDebug = onToggleDebug
+                onToggleDebug = onToggleDebug,
+                onSetAiSkillLevel = onSetAiSkillLevel
             )
         } else {
             MiniAetherBubble(
                 state = state,
+                engineStatus = engineStatus,
                 onClick = { expanded.value = true }
             )
         }
@@ -101,15 +99,11 @@ fun AetherFloatingMenuRoot(
 
 @Composable
 private fun MiniAetherBubble(
-    state: FloatingMenuState,
+    state: OverlayUiState,
+    engineStatus: EngineStatus,
     onClick: () -> Unit
 ) {
-    val statusColor = when (state.engineStatus) {
-        EngineStatus.Ready -> Color(0xFF38E27D)
-        EngineStatus.Warning -> Color(0xFFFFC857)
-        EngineStatus.Locked -> Color(0xFF7DA7FF)
-        EngineStatus.Error -> Color(0xFFFF5F6D)
-    }
+    val statusColor = statusColor(engineStatus)
 
     Row(
         modifier = Modifier
@@ -117,45 +111,38 @@ private fun MiniAetherBubble(
             .background(
                 Brush.horizontalGradient(
                     colors = listOf(
-                        Color(0xE61B1D26),
-                        Color(0xE62B2F3A)
+                        Color(0xEE10141D),
+                        Color(0xEE242B38)
                     )
                 )
             )
-            .border(
-                width = 1.dp,
-                color = Color(0x55FFFFFF),
-                shape = RoundedCornerShape(999.dp)
-            )
+            .border(1.dp, Color(0x55FFFFFF), RoundedCornerShape(999.dp))
             .clickable { onClick() }
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 13.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         StatusDot(statusColor)
-
-        Spacer(modifier = Modifier.width(8.dp))
-
+        Spacer(modifier = Modifier.width(9.dp))
         Text(
             text = "AE",
             color = Color.White,
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold
         )
-
-        Spacer(modifier = Modifier.width(8.dp))
-
+        Spacer(modifier = Modifier.width(9.dp))
         Text(
             text = "${state.confidence}%",
-            color = Color(0xFFD8E2FF),
+            color = Color(0xFFE5ECFF),
             fontSize = 12.sp,
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.SemiBold
         )
     }
 }
 
 @Composable
 private fun ExpandedAetherMenu(
-    state: FloatingMenuState,
+    state: OverlayUiState,
+    engineStatus: EngineStatus,
     expanded: MutableState<Boolean>,
     onClose: () -> Unit,
     onHideHud: () -> Unit,
@@ -163,24 +150,16 @@ private fun ExpandedAetherMenu(
     onOpenPermissions: () -> Unit,
     onToggleVision: () -> Unit,
     onToggleHud: () -> Unit,
-    onToggleAim: () -> Unit = {},
-    onToggleDebug: () -> Unit = {}
+    onToggleAim: () -> Unit,
+    onToggleDebug: () -> Unit,
+    onSetAiSkillLevel: (AiSkillLevel) -> Unit
 ) {
-    val width by animateDpAsState(
-        targetValue = 320.dp,
-        label = "menuWidth"
-    )
-
     Column(
         modifier = Modifier
-            .width(width)
+            .width(320.dp)
             .clip(RoundedCornerShape(24.dp))
-            .background(Color(0xF21A1D26))
-            .border(
-                width = 1.dp,
-                color = Color(0x33FFFFFF),
-                shape = RoundedCornerShape(24.dp)
-            )
+            .background(Color(0xF2141822))
+            .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(24.dp))
             .padding(16.dp)
     ) {
         MenuHeader(
@@ -190,31 +169,29 @@ private fun ExpandedAetherMenu(
         )
 
         Spacer(modifier = Modifier.height(12.dp))
-
-        EngineSummary(state)
-
+        EngineSummary(state, engineStatus)
         Spacer(modifier = Modifier.height(12.dp))
-
-        Divider(color = Color(0x22FFFFFF))
-
+        HorizontalDivider(color = Color(0x22FFFFFF))
         Spacer(modifier = Modifier.height(12.dp))
-
         StatusRows(state)
-
         Spacer(modifier = Modifier.height(14.dp))
 
         QuickMenuGrid(
             onToggleHud = onToggleHud,
             onToggleVision = onToggleVision,
-            onOpenPermissions = onOpenPermissions,
             onToggleAim = onToggleAim,
-            onToggleDebug = onToggleDebug
+            onToggleDebug = onToggleDebug,
+            onOpenPermissions = onOpenPermissions
         )
 
         Spacer(modifier = Modifier.height(14.dp))
+        AiSkillLevelCard(
+            state = state,
+            onSetAiSkillLevel = onSetAiSkillLevel
+        )
 
+        Spacer(modifier = Modifier.height(14.dp))
         VisionCard(state)
-
         Spacer(modifier = Modifier.height(14.dp))
 
         BottomActions(
@@ -227,7 +204,7 @@ private fun ExpandedAetherMenu(
 
 @Composable
 private fun MenuHeader(
-    state: FloatingMenuState,
+    state: OverlayUiState,
     onCollapse: () -> Unit,
     onClose: () -> Unit
 ) {
@@ -235,40 +212,31 @@ private fun MenuHeader(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(
-            modifier = Modifier.weight(1f)
-        ) {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = "Aether Engine",
                 color = Color.White,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
             )
-
             Text(
-                text = state.modeLabel,
+                text = "${state.modeLabel} / AI ${state.aiSkillShortLabel}",
                 color = Color(0xFF9BA7C7),
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium
             )
         }
-
-        SmallIconButton(
-            label = "—",
-            onClick = onCollapse
-        )
-
+        SmallIconButton(label = "-", onClick = onCollapse)
         Spacer(modifier = Modifier.width(8.dp))
-
-        SmallIconButton(
-            label = "×",
-            onClick = onClose
-        )
+        SmallIconButton(label = "x", onClick = onClose)
     }
 }
 
 @Composable
-private fun EngineSummary(state: FloatingMenuState) {
+private fun EngineSummary(
+    state: OverlayUiState,
+    engineStatus: EngineStatus
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -277,30 +245,24 @@ private fun EngineSummary(state: FloatingMenuState) {
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        MiniRadar()
-
+        MiniRadar(statusColor(engineStatus))
         Spacer(modifier = Modifier.width(12.dp))
-
-        Column(
-            modifier = Modifier.weight(1f)
-        ) {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = "Vision Pipeline",
                 color = Color.White,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold
             )
-
             Text(
-                text = if (state.visionActive) "READY / ${state.fps} FPS" else "OFFLINE",
+                text = if (state.showVisionMarkers) "${state.aiSkillLabel} / ${state.fps} FPS" else "MARKERS OFF",
                 color = Color(0xFF9BA7C7),
                 fontSize = 12.sp
             )
         }
-
         Text(
             text = "${state.confidence}%",
-            color = Color(0xFF38E27D),
+            color = statusColor(engineStatus),
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold
         )
@@ -308,14 +270,13 @@ private fun EngineSummary(state: FloatingMenuState) {
 }
 
 @Composable
-private fun StatusRows(state: FloatingMenuState) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        StatusRow("Overlay", if (state.overlayVisible) "ON" else "OFF", state.overlayVisible)
-        StatusRow("Vision", if (state.visionActive) "ACTIVE" else "OFF", state.visionActive)
-        StatusRow("Trajectory", if (state.trajectoryReady) "READY" else "WAITING", state.trajectoryReady)
-        StatusRow("Execution", if (state.executionLocked) "LOCKED" else "ACTIVE", !state.executionLocked)
+private fun StatusRows(state: OverlayUiState) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        StatusRow("Overlay", if (state.showHud) "ON" else "OFF", state.showHud)
+        StatusRow("Aim Guide", if (state.showAimGuide) "ACTIVE" else "OFF", state.showAimGuide)
+        StatusRow("Vision", if (state.showVisionMarkers) "ACTIVE" else "OFF", state.showVisionMarkers)
+        StatusRow("AI Skill", state.aiSkillShortLabel.uppercase(), true)
+        StatusRow("Execution", "LOCKED", false, locked = true)
     }
 }
 
@@ -323,25 +284,27 @@ private fun StatusRows(state: FloatingMenuState) {
 private fun StatusRow(
     title: String,
     value: String,
-    positive: Boolean
+    positive: Boolean,
+    locked: Boolean = false
 ) {
-    val color = if (positive) Color(0xFF38E27D) else Color(0xFFFFC857)
+    val color = when {
+        locked -> Color(0xFF4DA3FF)
+        positive -> Color(0xFF38E27D)
+        else -> Color(0xFFFFC857)
+    }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
         StatusDot(color)
-
         Spacer(modifier = Modifier.width(8.dp))
-
         Text(
             text = title,
             color = Color(0xFFDDE5FF),
             fontSize = 13.sp,
             modifier = Modifier.weight(1f)
         )
-
         Text(
             text = value,
             color = color,
@@ -355,71 +318,127 @@ private fun StatusRow(
 private fun QuickMenuGrid(
     onToggleHud: () -> Unit,
     onToggleVision: () -> Unit,
-    onOpenPermissions: () -> Unit,
-    onToggleAim: () -> Unit = {},
-    onToggleDebug: () -> Unit = {}
+    onToggleAim: () -> Unit,
+    onToggleDebug: () -> Unit,
+    onOpenPermissions: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MenuChip("HUD", Modifier.weight(1f), onClick = onToggleHud)
+            MenuChip("Vision", Modifier.weight(1f), onClick = onToggleVision)
+            MenuChip("Aim", Modifier.weight(1f), onClick = onToggleAim)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MenuChip("Debug", Modifier.weight(1f), onClick = onToggleDebug)
+            MenuChip("Rules", Modifier.weight(1f), onClick = {})
+            MenuChip("Perms", Modifier.weight(1f), onClick = onOpenPermissions)
+        }
+    }
+}
+
+
+@Composable
+private fun AiSkillLevelCard(
+    state: OverlayUiState,
+    onSetAiSkillLevel: (AiSkillLevel) -> Unit
 ) {
     Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color(0xFF141A25))
+            .border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(18.dp))
+            .padding(12.dp)
     ) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            MenuChip(
-                text = "HUD",
-                modifier = Modifier.weight(1f),
-                onClick = onToggleHud
-            )
-
-            MenuChip(
-                text = "Vision",
-                modifier = Modifier.weight(1f),
-                onClick = onToggleVision
-            )
-
-            MenuChip(
-                text = "Aim",
-                modifier = Modifier.weight(1f),
-                onClick = onToggleAim
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "AI Skill Level",
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = state.aiSkillLevel.description,
+                    color = Color(0xFF8D98B8),
+                    fontSize = 11.sp,
+                    lineHeight = 14.sp
+                )
+            }
+            Text(
+                text = state.aiSkillShortLabel,
+                color = Color(0xFF38E27D),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold
             )
         }
 
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            MenuChip(
-                text = "Debug",
-                modifier = Modifier.weight(1f),
-                onClick = onToggleDebug
-            )
+        Spacer(modifier = Modifier.height(10.dp))
 
-            MenuChip(
-                text = "Rules",
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SkillChip(
+                text = "Basic",
+                selected = state.aiSkillLevel == AiSkillLevel.BEGINNER,
                 modifier = Modifier.weight(1f),
-                onClick = {}
+                onClick = { onSetAiSkillLevel(AiSkillLevel.BEGINNER) }
             )
-
-            MenuChip(
-                text = "Perms",
+            SkillChip(
+                text = "Smart",
+                selected = state.aiSkillLevel == AiSkillLevel.INTERMEDIATE,
                 modifier = Modifier.weight(1f),
-                onClick = onOpenPermissions
+                onClick = { onSetAiSkillLevel(AiSkillLevel.INTERMEDIATE) }
+            )
+            SkillChip(
+                text = "Pro",
+                selected = state.aiSkillLevel == AiSkillLevel.ADVANCED,
+                modifier = Modifier.weight(1f),
+                onClick = { onSetAiSkillLevel(AiSkillLevel.ADVANCED) }
             )
         }
     }
 }
 
 @Composable
-private fun VisionCard(state: FloatingMenuState) {
+private fun SkillChip(
+    text: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val bg = if (selected) Color(0xFF123B2A) else Color(0xFF232A38)
+    val fg = if (selected) Color(0xFF38E27D) else Color(0xFFDDE5FF)
+    val border = if (selected) Color(0xAA38E27D) else Color(0x22FFFFFF)
+
+    Box(
+        modifier = modifier
+            .defaultMinSize(minHeight = 36.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(bg)
+            .border(1.dp, border, RoundedCornerShape(14.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            color = fg,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+@Composable
+private fun VisionCard(state: OverlayUiState) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
             .background(Color(0xFF11141C))
-            .border(
-                width = 1.dp,
-                color = Color(0x22FFFFFF),
-                shape = RoundedCornerShape(18.dp)
-            )
+            .border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(18.dp))
             .padding(12.dp)
     ) {
         Text(
@@ -428,12 +447,11 @@ private fun VisionCard(state: FloatingMenuState) {
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold
         )
-
         Spacer(modifier = Modifier.height(8.dp))
-
         InfoLine("Ball Count", state.ballCount.toString())
-        InfoLine("Target", state.targetLabel)
+        InfoLine("Target", state.targetBall?.label ?: "N/A")
         InfoLine("Confidence", "${state.confidence}%")
+        InfoLine("AI Skill", state.aiSkillLabel)
     }
 }
 
@@ -443,35 +461,15 @@ private fun BottomActions(
     onReset: () -> Unit,
     onClose: () -> Unit
 ) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        MenuChip(
-            text = "Hide HUD",
-            modifier = Modifier.weight(1f),
-            onClick = onHideHud
-        )
-
-        MenuChip(
-            text = "Reset",
-            modifier = Modifier.weight(1f),
-            onClick = onReset
-        )
-
-        MenuChip(
-            text = "Close",
-            modifier = Modifier.weight(1f),
-            danger = true,
-            onClick = onClose
-        )
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        MenuChip("Hide HUD", Modifier.weight(1f), onClick = onHideHud)
+        MenuChip("Reset", Modifier.weight(1f), warning = true, onClick = onReset)
+        MenuChip("Close", Modifier.weight(1f), danger = true, onClick = onClose)
     }
 }
 
 @Composable
-private fun InfoLine(
-    title: String,
-    value: String
-) {
+private fun InfoLine(title: String, value: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -483,7 +481,6 @@ private fun InfoLine(
             fontSize = 12.sp,
             modifier = Modifier.weight(1f)
         )
-
         Text(
             text = value,
             color = Color(0xFFDDE5FF),
@@ -498,21 +495,26 @@ private fun MenuChip(
     text: String,
     modifier: Modifier = Modifier,
     danger: Boolean = false,
+    warning: Boolean = false,
     onClick: () -> Unit
 ) {
-    val bg = if (danger) Color(0xFF3A1D26) else Color(0xFF283044)
-    val fg = if (danger) Color(0xFFFF8A9A) else Color(0xFFDDE5FF)
+    val bg = when {
+        danger -> Color(0xFF3A1D26)
+        warning -> Color(0xFF5A3511)
+        else -> Color(0xFF283044)
+    }
+    val fg = when {
+        danger -> Color(0xFFFF8A9A)
+        warning -> Color(0xFFFFD08A)
+        else -> Color(0xFFDDE5FF)
+    }
 
     Box(
         modifier = modifier
             .defaultMinSize(minHeight = 38.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(bg)
-            .border(
-                width = 1.dp,
-                color = Color(0x22FFFFFF),
-                shape = RoundedCornerShape(14.dp)
-            )
+            .border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(14.dp))
             .clickable { onClick() }
             .padding(horizontal = 10.dp, vertical = 9.dp),
         contentAlignment = Alignment.Center
@@ -527,10 +529,7 @@ private fun MenuChip(
 }
 
 @Composable
-private fun SmallIconButton(
-    label: String,
-    onClick: () -> Unit
-) {
+private fun SmallIconButton(label: String, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .size(32.dp)
@@ -552,33 +551,28 @@ private fun SmallIconButton(
 private fun StatusDot(color: Color) {
     Box(
         modifier = Modifier
-            .size(9.dp)
+            .size(10.dp)
             .clip(CircleShape)
             .background(color)
     )
 }
 
 @Composable
-private fun MiniRadar() {
-    Canvas(
-        modifier = Modifier.size(38.dp)
-    ) {
+private fun MiniRadar(color: Color) {
+    Canvas(modifier = Modifier.size(38.dp)) {
         val center = Offset(size.width / 2f, size.height / 2f)
-        drawCircle(
-            color = Color(0x5538E27D),
-            radius = size.minDimension * 0.48f,
-            center = center
-        )
-        drawCircle(
-            color = Color(0xFF38E27D),
-            radius = size.minDimension * 0.16f,
-            center = center
-        )
-        drawLine(
-            color = Color(0xAA38E27D),
-            start = center,
-            end = Offset(size.width * 0.85f, size.height * 0.25f),
-            strokeWidth = 3f
-        )
+        drawCircle(color = color.copy(alpha = 0.24f), radius = size.minDimension * 0.48f, center = center)
+        drawCircle(color = color.copy(alpha = 0.48f), radius = size.minDimension * 0.32f, center = center, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f))
+        drawCircle(color = color, radius = size.minDimension * 0.14f, center = center)
+        drawLine(color = color.copy(alpha = 0.90f), start = center, end = Offset(size.width * 0.86f, size.height * 0.26f), strokeWidth = 3f)
+    }
+}
+
+private fun statusColor(status: EngineStatus): Color {
+    return when (status) {
+        EngineStatus.Ready -> Color(0xFF38E27D)
+        EngineStatus.Warning -> Color(0xFFFFC857)
+        EngineStatus.Locked -> Color(0xFF4DA3FF)
+        EngineStatus.Error -> Color(0xFFFF5F6D)
     }
 }

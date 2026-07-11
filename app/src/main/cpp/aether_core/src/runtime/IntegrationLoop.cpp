@@ -33,11 +33,13 @@ constexpr float CENTER_TAP_RADIUS_RATIO = 0.18f;
 struct RuntimeSwitchState {
     std::atomic<bool> hudVisible;
     std::atomic<bool> aiActive;
+    std::atomic<int> skillLevel;
     std::atomic<std::uint64_t> lastCenterTapNanos;
 
     RuntimeSwitchState() noexcept
         : hudVisible(true),
           aiActive(true),
+          skillLevel(static_cast<int>(SkillLevel::Intermediate)),
           lastCenterTapNanos(0ULL) {}
 };
 
@@ -51,9 +53,21 @@ IntegrationLoop& runtimeIntegrationLoop() noexcept {
     return loop;
 }
 
-SkillProfile& runtimeSkillProfile() noexcept {
-    static SkillProfile skill = makeSkillProfile(SkillLevel::Intermediate);
-    return skill;
+SkillLevel sanitizeSkillLevel(int rawLevel) noexcept {
+    if (rawLevel <= static_cast<int>(SkillLevel::Beginner)) {
+        return SkillLevel::Beginner;
+    }
+
+    if (rawLevel >= static_cast<int>(SkillLevel::Advanced)) {
+        return SkillLevel::Advanced;
+    }
+
+    return SkillLevel::Intermediate;
+}
+
+SkillProfile runtimeSkillProfile() noexcept {
+    const int rawLevel = runtimeSwitchState().skillLevel.load(std::memory_order_relaxed);
+    return makeSkillProfile(sanitizeSkillLevel(rawLevel));
 }
 
 PhysicsExperienceState normalizeObserverState(
@@ -395,6 +409,21 @@ bool integrationLoopAiActive() noexcept {
     return runtimeSwitchState().aiActive.load(std::memory_order_relaxed);
 }
 
+int integrationLoopSkillLevel() noexcept {
+    const int rawLevel = runtimeSwitchState().skillLevel.load(std::memory_order_relaxed);
+    return static_cast<int>(sanitizeSkillLevel(rawLevel));
+}
+
+bool integrationLoopSetSkillLevel(int rawLevel) noexcept {
+    if (rawLevel < static_cast<int>(SkillLevel::Beginner) ||
+        rawLevel > static_cast<int>(SkillLevel::Advanced)) {
+        return false;
+    }
+
+    runtimeSwitchState().skillLevel.store(rawLevel, std::memory_order_relaxed);
+    return true;
+}
+
 } // namespace aether
 
 #if defined(AETHER_ENABLE_INTEGRATION_JNI)
@@ -449,6 +478,26 @@ Java_com_aether_renderer_AetherIntegrationLoop_nativeAiActive(
     return aether::integrationLoopAiActive() ? JNI_TRUE : JNI_FALSE;
 }
 
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_aether_renderer_AetherIntegrationLoop_nativeSkillLevel(
+    JNIEnv*,
+    jclass
+) {
+    return static_cast<jint>(aether::integrationLoopSkillLevel());
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_aether_renderer_AetherIntegrationLoop_nativeSetSkillLevel(
+    JNIEnv*,
+    jclass,
+    jint level
+) {
+    return aether::integrationLoopSetSkillLevel(static_cast<int>(level))
+        ? JNI_TRUE
+        : JNI_FALSE;
+}
+
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_aether_renderer_AetherIntegrationLoop_nativeRunFrame(
     JNIEnv* env,
@@ -467,10 +516,11 @@ Java_com_aether_renderer_AetherIntegrationLoop_nativeRunFrame(
         keyChars = env->GetStringUTFChars(authorizationKey, nullptr);
     }
 
+    const aether::SkillProfile skill = aether::runtimeSkillProfile();
     const aether::IntegrationLoopResult result =
         aether::runtimeIntegrationLoop().executeAutoPlayFrame(
             observerState,
-            aether::runtimeSkillProfile(),
+            skill,
             keyChars
         );
 

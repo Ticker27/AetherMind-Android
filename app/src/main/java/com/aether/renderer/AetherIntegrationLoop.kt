@@ -31,6 +31,18 @@ object AetherIntegrationLoop {
     external fun nativeAiActive(): Boolean
     external fun nativeLatestHudIntent(): Int
 
+    /**
+     * Native AI skill level used by the C++ planner/humanizer profile.
+     * 0 = Beginner / Basic, 1 = Intermediate / Smart, 2 = Advanced / Pro.
+     */
+    external fun nativeSkillLevel(): Int
+
+    /**
+     * Updates the C++ runtime skill profile. Returns false only for an invalid
+     * level or a native runtime failure. Execution remains locked elsewhere.
+     */
+    external fun nativeSetSkillLevel(level: Int): Boolean
+
     fun initializeAetherNative(): Boolean {
         val stateSize = NativeTrajectoryBridge.nativeStateSize()
         val layoutVersion = NativeTrajectoryBridge.nativeStateLayoutVersion()

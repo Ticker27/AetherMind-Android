@@ -64,7 +64,7 @@ class MainActivity : Activity() {
         handler.removeCallbacks(refreshLoop)
         handler.post(refreshLoop)
         syncPermissionButtons()
-        if (hasAllRuntimePermissions()) startHudService()
+        if (Settings.canDrawOverlays(this)) startHudService()
     }
 
     override fun onPause() {
@@ -81,7 +81,6 @@ class MainActivity : Activity() {
     private fun setDashboardOverlayGate(visible: Boolean) {
         val state = if (visible) DashboardOverlayGate.dashboardVisible() else DashboardOverlayGate.externalVisible()
         AetherRuntimeBus.publishDashboardOverlayGate(state)
-        AetherOverlayService.instance?.updateHud(AetherRuntimeBus.telemetry)
     }
 
     private fun setupHudModeSpinner() {
@@ -117,7 +116,6 @@ class MainActivity : Activity() {
     private fun saveProfile(packageName: String, mode: HudMode) {
         val profile = ProfileRules.saveManual(this, packageName, mode)
         AetherRuntimeBus.publishProfile(profile)
-        AetherOverlayService.instance?.updateHud(AetherRuntimeBus.telemetry)
     }
 
     private fun bindButtons() {
@@ -128,7 +126,7 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.btnToggleHud).setOnClickListener {
             AetherIntegrationLoop.nativeOnKeyEvent(24, true)
             val visible = AetherIntegrationLoop.nativeHudVisible()
-            if (visible) startHudService() else AetherOverlayService.instance?.updateHud(null)
+            if (visible) startHudService() else stopHudService()
             updatePanelStatus(AetherRuntimeBus.telemetry)
         }
 
@@ -154,12 +152,7 @@ class MainActivity : Activity() {
             requestOverlayPermission()
             return
         }
-        if (Settings.canDrawOverlays(this) && !isAccessibilityEnabled() && !prefs.getBoolean("accessibility_prompted", false)) {
-            prefs.edit().putBoolean("accessibility_prompted", true).apply()
-            openAccessibilitySettings()
-            return
-        }
-        if (hasAllRuntimePermissions()) startHudService()
+        if (Settings.canDrawOverlays(this)) startHudService()
     }
 
     private fun requestOverlayPermission() {
@@ -177,11 +170,17 @@ class MainActivity : Activity() {
 
     private fun startHudService() {
         if (Settings.canDrawOverlays(this)) {
-            // ใช้ AetherDevOverlayService แทนตัวเก่า (AetherOverlayService)
-            runCatching { 
+            runCatching {
                 val intent = Intent(this, com.aethermind.ui.AetherDevOverlayService::class.java)
                 startService(intent)
             }
+        }
+    }
+
+    private fun stopHudService() {
+        runCatching {
+            val intent = Intent(this, com.aethermind.ui.AetherDevOverlayService::class.java)
+            stopService(intent)
         }
     }
 
@@ -209,7 +208,6 @@ class MainActivity : Activity() {
         AetherRuntimeBus.publishTelemetry(telemetry)
         updatePanelStatus(telemetry)
         startHudService()
-        AetherOverlayService.instance?.updateHud(telemetry)
         if (showToast) toast(if (success) "Native frame OK" else "Native frame failed")
     }
 
@@ -345,8 +343,11 @@ class MainActivity : Activity() {
     private fun isAccessibilityEnabled(): Boolean {
         val manager = getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
         val enabled = manager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
-        val expected = "$packageName/.accessibility.AetherAccessibilityService"
-        return enabled.any { it.resolveInfo.serviceInfo.packageName == packageName || it.id == expected }
+        val expectedClass = "com.aethermind.execution.AetherAccessibilityService"
+        return enabled.any { info ->
+            info.resolveInfo.serviceInfo.packageName == packageName &&
+                info.resolveInfo.serviceInfo.name == expectedClass
+        }
     }
 
     private fun toast(message: String) {
