@@ -460,7 +460,7 @@ HumanizerState gCadenceState;
 
 } // namespace
 
-HumanPersona aether::makePersona(std::uint64_t seed) noexcept {
+HumanPersona makePersona(std::uint64_t seed) noexcept {
     HumanPersona p;
     std::uint64_t x = seed ? seed : 0xA37B5F19D4C3B2A1ULL;
 
@@ -506,11 +506,11 @@ HumanMotionProfile Humanizer::motionProfile(double difficulty) const noexcept {
     return p;
 }
 
-double aether::humanCadenceMs(double difficulty) noexcept {
+double humanCadenceMs(double difficulty) noexcept {
     return gHumanizer.sampleCadenceMs(difficulty);
 }
 
-std::string aether::humanMotionProfileJson(double difficulty) noexcept {
+std::string humanMotionProfileJson(double difficulty) noexcept {
     const HumanMotionProfile p = gHumanizer.motionProfile(difficulty);
     char buf[192];
     std::snprintf(

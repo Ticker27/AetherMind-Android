@@ -17,9 +17,9 @@ object MockPoolOverlayProvider {
         aiSkillLevel: AiSkillLevel = AiSkillLevel.INTERMEDIATE,
         autoPlayEnabled: Boolean = false,
         autoPlayArmed: Boolean = false,
-        autoPlayStatus: String = if (autoPlayEnabled) "ARMED" else "OFF",
-        autoPlayIntervalMs: Int = 1200,
-        autoPlayPowerPx: Float = 420f
+        autoPlayStatus: String = "LOCKED",
+        autoPlayIntervalMs: Int = 0,
+        autoPlayPowerPx: Float = 0f
     ): OverlayUiState {
         val w = width.toFloat().coerceAtLeast(1f)
         val h = height.toFloat().coerceAtLeast(1f)

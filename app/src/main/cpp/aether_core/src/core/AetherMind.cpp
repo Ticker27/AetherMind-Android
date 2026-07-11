@@ -1,53 +1,88 @@
 #include "aether/core/AetherMind.h"
 #include "aether/foundation/Vec2.h"
 
+#include <sstream>
 #include <vector>
 
 namespace aether {
+
+namespace {
+
+const char* issueName(ValidationIssueCode code) noexcept {
+    switch (code) {
+        case ValidationIssueCode::MockSource: return "MOCK_SOURCE";
+        case ValidationIssueCode::UnknownSource: return "UNKNOWN_SOURCE";
+        case ValidationIssueCode::TableNotVerified: return "TABLE_NOT_VERIFIED";
+        case ValidationIssueCode::CueBallMissing: return "CUE_BALL_MISSING";
+        case ValidationIssueCode::NoObjectBalls: return "NO_OBJECT_BALLS";
+        case ValidationIssueCode::BallOutOfBounds: return "BALL_OUT_OF_BOUNDS";
+        case ValidationIssueCode::LowConfidenceWorld: return "LOW_CONFIDENCE_WORLD";
+        case ValidationIssueCode::ExecutionLocked: return "EXECUTION_LOCKED";
+        case ValidationIssueCode::None:
+        default: return "NONE";
+    }
+}
+
+std::string explainValidationOnly(
+    const WorldState& world,
+    const ValidationReport& report
+) {
+    std::ostringstream ss;
+    ss << "PROPOSE_ONLY diagnostic: source="
+       << perceptionSourceName(world.meta.source)
+       << " confidence=" << report.confidence
+       << " execution=LOCKED";
+
+    for (const auto& issue : report.issues) {
+        ss << " | " << issueName(issue.code) << ": " << issue.message;
+    }
+
+    return ss.str();
+}
+
+void forceNoExecution(MindOutput& output) noexcept {
+    output.executedAction = Action{};
+    output.executionAngleError = 0.0;
+    output.executionPowerError = 0.0;
+    output.executionBlunder = false;
+    output.executedPocketed = false;
+    output.executedCuePocketed = false;
+    output.executedFirstHitId = -1;
+    output.executedTargetPocketDistance = 999.0;
+    output.executedPocketMargin = -999.0;
+    output.executedConfidence = 0.0;
+    output.executedTravelDistance = 0.0;
+}
+
+} // namespace
 
 AetherMind::AetherMind(
     SkillLevel level,
     const std::string& memoryName_
 )
     : skill(makeSkillProfile(level)),
-      memoryName(memoryName_),
-      memoryStore("data/state") {
-    if (!memoryName.empty()) {
-        memoryStore.loadExperience(memoryName, experienceMemory);
-    }
-}
-
-static void applyMemoryBiasToPlans(
-    std::vector<RankedPlan>& plans,
-    const ExperienceMemory& memory,
-    const SkillProfile& skill
-) {
-    for (auto& plan : plans) {
-        double confidenceBias =
-            memory.confidenceBias(plan.candidate.action, skill);
-
-        double riskBias =
-            memory.riskBias(plan.candidate.action, skill);
-
-        plan.score.confidence =
-            clamp01(plan.score.confidence + confidenceBias);
-
-        plan.score.risk =
-            clamp01(plan.score.risk + riskBias);
-
-        plan.score.score = clamp01(
-            plan.score.score +
-            confidenceBias * 0.32 -
-            riskBias * 0.50
-        );
-    }
-}
+      memoryName(memoryName_) {}
 
 MindOutput AetherMind::think(const MindInput& input) {
     WorldState world = worldBuilder.build(input.perception);
+    const ValidationReport validation = worldValidator.validate(world);
+
+    MindOutput output;
+    output.confidence = validation.confidence;
+    output.risk = validation.usable ? 0.45 : 1.0;
+    output.expectedReward = 0.0;
+    output.targetId = -1;
+    output.memorySummary = "memory disabled in diagnostic/propose-only mode";
+    output.memoryConfidenceBias = 0.0;
+    output.memoryRiskBias = 0.0;
+    output.explanation = explainValidationOnly(world, validation);
+
+    if (!validation.usable) {
+        forceNoExecution(output);
+        return output;
+    }
 
     auto candidates = actionGenerator.generate(world, skill);
-
     auto plans = planner.buildPlans(
         world,
         candidates,
@@ -56,48 +91,24 @@ MindOutput AetherMind::think(const MindInput& input) {
         skill
     );
 
-    applyMemoryBiasToPlans(
-        plans,
-        experienceMemory,
-        skill
-    );
+    output = decisionPolicy.choose(plans, skill);
+    forceNoExecution(output);
 
-    MindOutput output = decisionPolicy.choose(plans, skill);
+    std::ostringstream ss;
+    ss << "PROPOSE_ONLY human-like candidate; no command emitted. "
+       << "source=" << perceptionSourceName(world.meta.source)
+       << " worldConfidence=" << validation.confidence
+       << " execution=LOCKED | "
+       << output.explanation;
 
-    output.memoryConfidenceBias =
-        experienceMemory.confidenceBias(output.plannedAction, skill);
-
-    output.memoryRiskBias =
-        experienceMemory.riskBias(output.plannedAction, skill);
-
-    ExecutionResult executed =
-        executionModel.execute(output.plannedAction, skill);
-
-    output.plannedAction = executed.plannedAction;
-    output.executedAction = executed.executedAction;
-    output.executionAngleError = executed.angleError;
-    output.executionPowerError = executed.powerError;
-    output.executionBlunder = executed.blunder;
-
-    SimulationResult executedSim =
-        physicsKernel.simulate(world, output.executedAction);
-
-    output.executedPocketed = executedSim.targetPocketed;
-    output.executedCuePocketed = executedSim.cuePocketed;
-    output.executedFirstHitId = executedSim.firstHitId;
-    output.executedTargetPocketDistance = executedSim.targetClosestPocketDistance;
-    output.executedPocketMargin = executedSim.targetPocketMargin;
-    output.executedConfidence = executedSim.confidence;
-    output.executedTravelDistance = executedSim.travelDistance;
-
-    experienceMemory.record(output, skill);
-
-    if (!memoryName.empty()) {
-        memoryStore.saveExperience(memoryName, experienceMemory);
+    for (const auto& issue : validation.issues) {
+        ss << " | " << issueName(issue.code) << ": " << issue.message;
     }
 
-    output.memorySummary = experienceMemory.summary();
-
+    output.explanation = ss.str();
+    output.memorySummary = "memory write blocked; diagnostic trace only";
+    output.memoryConfidenceBias = 0.0;
+    output.memoryRiskBias = 0.0;
     return output;
 }
 

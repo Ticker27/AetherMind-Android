@@ -283,11 +283,11 @@ private fun EngineSummary(
 private fun StatusRows(state: OverlayUiState) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         StatusRow("Overlay", if (state.showHud) "ON" else "OFF", state.showHud)
-        StatusRow("Aim Guide", if (state.showAimGuide) "ACTIVE" else "OFF", state.showAimGuide)
+        StatusRow("Proposal", if (state.showAimGuide) "ACTIVE" else "OFF", state.showAimGuide)
         StatusRow("Vision", if (state.showVisionMarkers) "ACTIVE" else "OFF", state.showVisionMarkers)
         StatusRow("AI Skill", state.aiSkillShortLabel.uppercase(), true)
-        StatusRow("Auto Play", if (state.autoPlayEnabled) "ARMED" else "OFF", state.autoPlayEnabled)
-        StatusRow("Execution", if (state.autoPlayEnabled) "GUARDED" else "LOCKED", state.autoPlayEnabled, locked = !state.autoPlayEnabled)
+        StatusRow("Auto Play", "LOCKED", false, locked = true)
+        StatusRow("Execution", "LOCKED", false, locked = true)
     }
 }
 

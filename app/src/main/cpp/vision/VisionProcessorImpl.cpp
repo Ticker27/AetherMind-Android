@@ -39,14 +39,14 @@ namespace aether::vision {
 // =============================================================================
 
 struct BallOutput {
-    int16_t x;           // X coordinate (Q0.16 fixed-point for sub-pixel)
-    int16_t y;           // Y coordinate (Q0.16 fixed-point)
+    int32_t xQ16;        // X coordinate, Q16 fixed-point pixel units
+    int32_t yQ16;        // Y coordinate, Q16 fixed-point pixel units
     uint16_t radius;     // Approximate radius in pixels
     uint8_t confidence;  // Confidence score (0-255)
-    uint8_t colorIndex;   // Color classification (1=Red, 2=Yellow, 3=Green)
-    uint8_t padding[2];  // Alignment padding
-    
-    BallOutput() : x(0), y(0), radius(0), confidence(0), colorIndex(0), padding{0,0} {}
+    uint8_t colorIndex;  // Color classification (1=Red, 2=Yellow, 3=Green)
+    uint8_t padding[4];  // Alignment padding
+
+    BallOutput() : xQ16(0), yQ16(0), radius(0), confidence(0), colorIndex(0), padding{0,0,0,0} {}
 };
 
 // =============================================================================
@@ -139,8 +139,8 @@ int VisionProcessor::processFrame(
                     BallOutput& ball = balls[ballCount];
                     
                     // Convert to fixed-point Q0.16 (multiply by 65536)
-                    ball.x = static_cast<int16_t>(x << 16);
-                    ball.y = static_cast<int16_t>(y << 16);
+                    ball.xQ16 = static_cast<int32_t>(x) << 16;
+                    ball.yQ16 = static_cast<int32_t>(y) << 16;
                     ball.radius = 20;  // Approximate
                     ball.confidence = std::min<uint8_t>(255, saturation + 50);
                     ball.colorIndex = colorMatch;
@@ -182,8 +182,8 @@ int VisionProcessor::processFrame(
                 
                 if (isBallPixel && ballCount < MAX_BALLS) {
                     BallOutput& ball = balls[ballCount];
-                    ball.x = static_cast<int16_t>((x + 1) << 16);
-                    ball.y = static_cast<int16_t>(y << 16);
+                    ball.xQ16 = static_cast<int32_t>(x + 1) << 16;
+                    ball.yQ16 = static_cast<int32_t>(y) << 16;
                     ball.radius = 20;
                     ball.confidence = std::min<uint8_t>(255, saturation + 50);
                     ball.colorIndex = colorMatch;
@@ -224,8 +224,8 @@ int VisionProcessor::processFrame(
                 
                 if (isBallPixel && ballCount < MAX_BALLS) {
                     BallOutput& ball = balls[ballCount];
-                    ball.x = static_cast<int16_t>((x + 2) << 16);
-                    ball.y = static_cast<int16_t>(y << 16);
+                    ball.xQ16 = static_cast<int32_t>(x + 2) << 16;
+                    ball.yQ16 = static_cast<int32_t>(y) << 16;
                     ball.radius = 20;
                     ball.confidence = std::min<uint8_t>(255, saturation + 50);
                     ball.colorIndex = colorMatch;
@@ -266,8 +266,8 @@ int VisionProcessor::processFrame(
                 
                 if (isBallPixel && ballCount < MAX_BALLS) {
                     BallOutput& ball = balls[ballCount];
-                    ball.x = static_cast<int16_t>((x + 3) << 16);
-                    ball.y = static_cast<int16_t>(y << 16);
+                    ball.xQ16 = static_cast<int32_t>(x + 3) << 16;
+                    ball.yQ16 = static_cast<int32_t>(y) << 16;
                     ball.radius = 20;
                     ball.confidence = std::min<uint8_t>(255, saturation + 50);
                     ball.colorIndex = colorMatch;
@@ -308,8 +308,8 @@ int VisionProcessor::processFrame(
             
             if (isBallPixel && ballCount < MAX_BALLS) {
                 BallOutput& ball = balls[ballCount];
-                ball.x = static_cast<int16_t>(x << 16);
-                ball.y = static_cast<int16_t>(y << 16);
+                ball.xQ16 = static_cast<int32_t>(x) << 16;
+                ball.yQ16 = static_cast<int32_t>(y) << 16;
                 ball.radius = 20;
                 ball.confidence = std::min<uint8_t>(255, saturation + 50);
                 ball.colorIndex = colorMatch;

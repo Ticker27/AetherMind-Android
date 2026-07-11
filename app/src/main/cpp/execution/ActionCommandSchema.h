@@ -25,7 +25,8 @@ enum class ExecutionStatus : std::int32_t {
     ERROR_INVALID_COMMAND_TYPE = -4,
     ERROR_INVALID_COORDINATE = -5,
     ERROR_ALLOCATION_FAILED = -6,
-    ERROR_INTERNAL = -7
+    ERROR_INTERNAL = -7,
+    ERROR_EXECUTION_LOCKED = -8
 };
 
 // ABI-stable command schema.

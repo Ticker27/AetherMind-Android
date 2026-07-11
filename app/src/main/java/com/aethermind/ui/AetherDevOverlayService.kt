@@ -108,7 +108,8 @@ class AetherDevOverlayService : Service() {
 
         aiSkillLevel = readNativeSkillLevel()
         autoPlayEnabled = readNativeAutoPlayEnabled()
-        autoPlayStatus = if (autoPlayEnabled) "ARMED" else "OFF"
+        autoPlayEnabled = false
+        autoPlayStatus = "LOCKED"
         autoPlayController = AutoPlayController(this) { status ->
             autoPlayStatus = status
         }
@@ -417,7 +418,8 @@ class AetherDevOverlayService : Service() {
         showAimGuide = true
         showVisionMarkers = true
         showDebugLabels = false
-        autoPlayStatus = if (autoPlayEnabled) "ARMED" else "OFF"
+        autoPlayEnabled = false
+        autoPlayStatus = "LOCKED"
         publishNow()
     }
 
@@ -450,20 +452,20 @@ class AetherDevOverlayService : Service() {
     private fun updateMenuTexts() {
         titleText?.text = "Aether Engine"
         modeText?.text = "${overlayState.modeLabel} / AI ${overlayState.aiSkillShortLabel}"
-        statusText?.text = "Overlay: ${if (showHud) "ON" else "OFF"}  Aim: ${if (showAimGuide) "ON" else "OFF"}"
+        statusText?.text = "Overlay: ${if (showHud) "ON" else "OFF"}  Proposal: ${if (showAimGuide) "ON" else "OFF"}"
         visionText?.text = "Vision: ${if (showVisionMarkers) "mock" else "hidden"} / balls=${overlayState.ballCount} / ${overlayState.fps} FPS"
         skillText?.text = "AI Skill: ${overlayState.aiSkillLabel}"
-        autoText?.text = "Auto Play: ${overlayState.autoPlayStatus} / ${overlayState.autoPlayIntervalMs}ms / ${overlayState.autoPlayPowerPx.toInt()}px"
+        autoText?.text = "Auto Play: LOCKED / propose-only"
         val bridgeHealth = readNativeBridgeHealth()
         val eyeStatus = readNativeEyeLinkStatus()
         bridgeText?.text = bridgeHealth
         eyeText?.text = eyeStatus
         logBridgeDiagnostics(bridgeHealth, eyeStatus)
         hudButton?.text = if (showHud) "HUD ON" else "HUD OFF"
-        aimButton?.text = if (showAimGuide) "Aim ON" else "Aim OFF"
+        aimButton?.text = if (showAimGuide) "Proposal ON" else "Proposal OFF"
         visionButton?.text = if (showVisionMarkers) "Vision ON" else "Vision OFF"
         debugButton?.text = if (showDebugLabels) "Debug ON" else "Debug OFF"
-        autoButton?.text = if (autoPlayEnabled) "Auto ON" else "Auto OFF"
+        autoButton?.text = "Auto LOCKED"
     }
 
     private fun startTicker() {
@@ -497,13 +499,11 @@ class AetherDevOverlayService : Service() {
     }
 
     private fun readNativeAutoPlayIntervalMs(): Int {
-        return runCatching { AetherIntegrationLoop.nativeAutoPlayIntervalMs() }
-            .getOrDefault(1200)
+        return 0
     }
 
     private fun readNativeAutoPlayPowerPx(): Float {
-        return runCatching { AetherIntegrationLoop.nativeAutoPlaySwipePowerPx() }
-            .getOrDefault(420f)
+        return 0f
     }
 
     private fun readNativeBridgeHealth(): String {
@@ -525,16 +525,12 @@ class AetherDevOverlayService : Service() {
     }
 
     private fun toggleAutoPlay() {
-        val requested = !autoPlayEnabled
-        val accepted = runCatching { AetherIntegrationLoop.nativeSetAutoPlayEnabled(requested) }
-            .getOrDefault(false)
-        autoPlayEnabled = if (accepted) readNativeAutoPlayEnabled() else requested
-        if (!autoPlayEnabled) {
-            autoPlayStatus = "OFF"
-            autoPlayController?.stopRuntime("AUTO_PLAY_TOGGLED_OFF")
-        } else {
-            autoPlayStatus = "ARMED"
-        }
+        // AT168: UI cannot arm execution. Keep the button as visible proof that
+        // the runtime is locked, then clear any legacy queue.
+        runCatching { AetherIntegrationLoop.nativeSetAutoPlayEnabled(false) }
+        autoPlayEnabled = false
+        autoPlayStatus = "LOCKED"
+        autoPlayController?.stopRuntime("AUTO_PLAY_LOCKED_BY_AT168")
         publishNow()
     }
 

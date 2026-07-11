@@ -8,6 +8,7 @@ endif()
 set(AETHER_BASE_CORE_SOURCES
     "${AETHER_PROJECT_ROOT}/src/core/AetherMind.cpp"
     "${AETHER_PROJECT_ROOT}/src/world/WorldBuilder.cpp"
+    "${AETHER_PROJECT_ROOT}/src/world/WorldStateValidator.cpp"
     "${AETHER_PROJECT_ROOT}/src/planning/ActionGenerator.cpp"
     "${AETHER_PROJECT_ROOT}/src/planning/Evaluator.cpp"
     "${AETHER_PROJECT_ROOT}/src/planning/CemPlanner.cpp"

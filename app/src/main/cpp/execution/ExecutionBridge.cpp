@@ -39,17 +39,12 @@ ExecutionStatus pushCommand(const ActionCommand& command) noexcept {
         return validation;
     }
 
-    try {
-        // Mutex protects the queue from concurrent producers/consumers.
-        // lock_guard releases automatically even if push_back throws.
-        std::lock_guard<std::mutex> lock(gQueueMutex);
-        gCommandQueue.push_back(command);
-        return ExecutionStatus::OK;
-    } catch (const std::bad_alloc&) {
-        return ExecutionStatus::ERROR_ALLOCATION_FAILED;
-    } catch (...) {
-        return ExecutionStatus::ERROR_INTERNAL;
-    }
+    // AT168 Core Truth Recovery: execution queue is retained for ABI
+    // compatibility, but no command is accepted while the project is in
+    // propose-only diagnostic mode.
+    std::lock_guard<std::mutex> lock(gQueueMutex);
+    gCommandQueue.clear();
+    return ExecutionStatus::ERROR_EXECUTION_LOCKED;
 }
 
 ExecutionStatus popCommand(ActionCommand& outCommand) noexcept {

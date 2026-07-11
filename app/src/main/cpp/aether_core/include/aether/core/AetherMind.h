@@ -5,17 +5,18 @@
 #include "aether/core/MindTypes.h"
 #include "aether/core/SkillProfile.h"
 #include "aether/world/WorldBuilder.h"
+#include "aether/world/WorldStateValidator.h"
 #include "aether/planning/ActionGenerator.h"
 #include "aether/planning/Evaluator.h"
 #include "aether/planning/Planner.h"
 #include "aether/planning/DecisionPolicy.h"
 #include "aether/physics/PhysicsKernel.h"
-#include "aether/cognition/ExecutionModel.h"
-#include "aether/memory/ExperienceMemory.h"
-#include "aether/memory/MemoryStore.h"
 
 namespace aether {
 
+// AetherMind is now the propose-only brain core.
+// It may analyze, rank and explain candidates, but it must not execute actions
+// or write real skill memory from mock/synthetic data.
 class AetherMind {
 public:
     explicit AetherMind(
@@ -30,14 +31,12 @@ private:
     std::string memoryName;
 
     WorldBuilder worldBuilder;
+    WorldStateValidator worldValidator;
     ActionGenerator actionGenerator;
     PhysicsKernel physicsKernel;
     Evaluator evaluator;
     Planner planner;
     DecisionPolicy decisionPolicy;
-    ExecutionModel executionModel;
-    ExperienceMemory experienceMemory;
-    MemoryStore memoryStore;
 };
 
 }

@@ -363,78 +363,17 @@ IntegrationLoopResult IntegrationLoop::classifyOnlyFrame(
 IntegrationLoopResult IntegrationLoop::executeAutoPlayFrame(
     const PhysicsExperienceState& observerState,
     const SkillProfile& skill,
-    const char* authorizationKey
+    const char*
 ) noexcept {
-    IntegrationLoopResult result;
-    result.observerState = normalizeObserverState(observerState);
-    result.executionState = result.observerState;
-    result.observerAccepted = true;
-
-    RuntimeSwitchState& switches = runtimeSwitchState();
-    const bool hudVisible = switches.hudVisible.load(std::memory_order_relaxed);
-    const bool aiActive = switches.aiActive.load(std::memory_order_relaxed);
-
-    Strategist strategist;
-    result.intent = strategist.selectIntent(result.observerState, skill);
-
-    const bool authorized = OmnisGate::autoPlayTrigger(authorizationKey);
-    result.authorized = authorized;
-    result.hud = makeHudTelemetry(result.intent.type, authorized, hudVisible, aiActive);
-
-    // Hard fail-closed contract:
-    // Without authorization, or while AI is idle, the loop may publish telemetry
-    // for the HUD/aim visualization only. It must not publish auto-play output.
-    if (!authorized || !aiActive) {
-        result.executionState = stampIntentFlag(result.executionState, result.intent.type);
-        result.executionState.flags |= FLAG_TELEMETRY_ONLY;
-        if (hudVisible) {
-            result.executionState.flags |= FLAG_HUD_VISIBLE;
-        }
-        if (aiActive) {
-            result.executionState.flags |= FLAG_AI_ACTIVE;
-        }
-        if (switches.autoPlayEnabled.load(std::memory_order_relaxed)) {
-            result.executionState.flags |= FLAG_AUTO_PLAY_ENABLED;
-        }
-        result.executed = false;
-        globalTrajectoryBridge().publishState(result.executionState);
-        return result;
-    }
-
-    CemPlanner planner;
-    Humanizer humanizer;
-    HumanizerState humanizerState;
-
-    const std::uint64_t seed =
-        result.observerState.timestampNanos ^
-        (++sequence * 0x9E3779B97F4A7C15ULL);
-
-    const PhysicsExperienceState planned = planner.planTelemetry(
-        result.observerState,
-        result.intent,
-        skill,
-        seed
-    );
-
-    result.executionState = humanizer.applyTelemetry(
-        planned,
-        skill,
-        humanizerState
-    );
-
-    result.executionState = stampIntentFlag(result.executionState, result.intent.type);
-    result.executionState.flags |= FLAG_INTEGRATION_LOOP;
-    result.executionState.flags |= FLAG_AUTHORIZED_EXECUTION;
-    result.executionState.flags |= FLAG_AI_ACTIVE;
-    if (switches.autoPlayEnabled.load(std::memory_order_relaxed)) {
-        result.executionState.flags |= FLAG_AUTO_PLAY_ENABLED;
-    }
-    if (hudVisible) {
-        result.executionState.flags |= FLAG_HUD_VISIBLE;
-    }
-    result.executionState.layoutVersion = AETHER_PHYSICS_EXPERIENCE_STATE_VERSION;
-    result.executed = true;
-
+    // AT168 Core Truth Recovery: execution is hard-locked at the native boundary.
+    // This function is kept only for ABI/source compatibility. It deliberately
+    // delegates to classifyOnlyFrame and never emits authorized execution flags.
+    IntegrationLoopResult result = classifyOnlyFrame(observerState, skill);
+    result.authorized = false;
+    result.executed = false;
+    result.executionState.flags |= FLAG_TELEMETRY_ONLY;
+    result.executionState.flags &= ~FLAG_AUTHORIZED_EXECUTION;
+    result.executionState.flags &= ~FLAG_AUTO_PLAY_ENABLED;
     globalTrajectoryBridge().publishState(result.executionState);
     return result;
 }
@@ -513,20 +452,19 @@ bool integrationLoopAutoPlayEnabled() noexcept {
 }
 
 bool integrationLoopSetAutoPlayEnabled(bool enabled) noexcept {
-    runtimeSwitchState().autoPlayEnabled.store(enabled, std::memory_order_relaxed);
-    return true;
+    (void)enabled;
+    // AT168: Auto-play cannot be armed from UI or JNI. This is a native hard
+    // gate, not a visual toggle.
+    runtimeSwitchState().autoPlayEnabled.store(false, std::memory_order_relaxed);
+    return false;
 }
 
 std::int32_t integrationLoopAutoPlayIntervalMs() noexcept {
-    const int rawLevel = runtimeSwitchState().skillLevel.load(std::memory_order_relaxed);
-    const AutoPlayPolicy policy = autoPlayPolicyForSkill(sanitizeSkillLevel(rawLevel));
-    return policy.intervalMs;
+    return 0;
 }
 
 float integrationLoopAutoPlaySwipePowerPx() noexcept {
-    const int rawLevel = runtimeSwitchState().skillLevel.load(std::memory_order_relaxed);
-    const AutoPlayPolicy policy = autoPlayPolicyForSkill(sanitizeSkillLevel(rawLevel));
-    return policy.swipePowerPx;
+    return 0.0f;
 }
 
 bool integrationLoopSetAccessibilitySnapshot(
@@ -608,7 +546,7 @@ std::string integrationLoopNativeBridgeHealth() {
 
     std::ostringstream out;
     out << "Native Bridge: OK | Eye=" << eye
-        << " | Exec=LOCKED | Mode=PROPOSE_ONLY";
+        << " | Exec=LOCKED | Mode=PROPOSE_ONLY | Auto=DISABLED_NATIVE";
 
 #if defined(AETHER_ENABLE_INTEGRATION_JNI)
     __android_log_print(
@@ -814,10 +752,9 @@ Java_com_aether_renderer_AetherIntegrationLoop_nativeRunFrame(
 
     const aether::SkillProfile skill = aether::runtimeSkillProfile();
     const aether::IntegrationLoopResult result =
-        aether::runtimeIntegrationLoop().executeAutoPlayFrame(
+        aether::runtimeIntegrationLoop().classifyOnlyFrame(
             observerState,
-            skill,
-            keyChars
+            skill
         );
 
     if (keyChars != nullptr) {

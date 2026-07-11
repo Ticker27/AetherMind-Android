@@ -78,6 +78,7 @@ object NativeExecutionStatus {
     const val ERROR_INVALID_COORDINATE = -5
     const val ERROR_ALLOCATION_FAILED = -6
     const val ERROR_INTERNAL = -7
+    const val ERROR_EXECUTION_LOCKED = -8
 
     fun nameOf(code: Int): String {
         return when (code) {
@@ -90,6 +91,7 @@ object NativeExecutionStatus {
             ERROR_INVALID_COORDINATE -> "ERROR_INVALID_COORDINATE"
             ERROR_ALLOCATION_FAILED -> "ERROR_ALLOCATION_FAILED"
             ERROR_INTERNAL -> "ERROR_INTERNAL"
+            ERROR_EXECUTION_LOCKED -> "ERROR_EXECUTION_LOCKED"
             else -> "UNKNOWN_STATUS_$code"
         }
     }
