@@ -5,7 +5,10 @@ import android.os.SystemClock
 import android.util.Log
 import com.aether.renderer.AetherIntegrationLoop
 import com.aethermind.ui.overlay.OverlayUiState
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.math.sqrt
+import kotlin.random.Random
 
 /**
  * Skill-adaptive auto-play coordinator.
@@ -34,6 +37,8 @@ class AutoPlayController(
 
     private var lastShotUptimeMs = 0L
     private var lastTargetPackage: String? = null
+    private var nextDelayMs = 1200L
+    private val shotRng = Random(0xBADC0DE)
 
     fun onFrame(state: OverlayUiState) {
         if (!state.autoPlayEnabled) {
@@ -72,7 +77,8 @@ class AutoPlayController(
         }
 
         val now = SystemClock.uptimeMillis()
-        val intervalMs = nativeIntervalMs().coerceAtLeast(350)
+        // Variable, human-like cadence (brain-owned). No fixed robot clock.
+        val intervalMs = nextDelayMs.coerceAtLeast(500)
         if (now - lastShotUptimeMs < intervalMs) {
             status("ARMED ${intervalMs}ms")
             return
@@ -93,16 +99,34 @@ class AutoPlayController(
             return
         }
 
+        // Difficulty drives the brain's think-time + stroke style.
+        val difficulty = (length / 700f).coerceIn(0f, 1f)
+
+        // --- Human-like variance on the ACTUAL dispatched shot (not just the
+        // overlay viz). A person never repeats the exact same power/angle. ---
+        val powerPx = (nativePowerPx() * (0.92f + shotRng.nextFloat() * 0.16f))
+            .coerceIn(160f, 900f)
+
+        // small aim-angle wobble (rad), rotated into the swipe vector
+        val aimJitter = (shotRng.nextFloat() * 2f - 1f) * 0.02f
+        val ca = cos(aimJitter)
+        val sa = sin(aimJitter)
+        val rx = vx * ca - vy * sa
+        val ry = vx * sa + vy * ca
+
+        val dx = -(rx / length) * powerPx
+        val dy = -(ry / length) * powerPx
+
+        // tiny anchor jitter so the touch origin is never pixel-identical
+        val ax = cue.center.x + (shotRng.nextFloat() * 2f - 1f) * 2f
+        val ay = cue.center.y + (shotRng.nextFloat() * 2f - 1f) * 2f
+
         // In common pool touch controls, the player pulls the cue ball backward
         // from the intended shot direction. The command stores cue-ball start x/y
         // and a packed dx/dy swipe delta in the reserved field.
-        val powerPx = nativePowerPx().coerceIn(160f, 900f)
-        val dx = -(vx / length) * powerPx
-        val dy = -(vy / length) * powerPx
-
         val command = ActionCommand(
-            x = cue.center.x,
-            y = cue.center.y,
+            x = ax,
+            y = ay,
             type = ActionCommandType.SWIPE,
             reserved = GestureCommandPacking.packSwipeDelta(dx, dy),
             timestampNanos = System.nanoTime()
@@ -111,8 +135,12 @@ class AutoPlayController(
         val result = AetherExecutionBridge.pushCommand(command)
         if (result == NativeExecutionStatus.OK) {
             lastShotUptimeMs = now
+            // Sample NEXT gap from the brain (harder shots => longer think).
+            nextDelayMs = runCatching {
+                AetherIntegrationLoop.nativeHumanCadenceMs(difficulty)
+            }.getOrDefault(nativeIntervalMs()).coerceAtLeast(500)
             status("QUEUED ${targetPackage.substringAfterLast('.')}")
-            Log.d(TAG, "Auto shot queued target=$targetPackage dx=$dx dy=$dy interval=$intervalMs power=$powerPx")
+            Log.d(TAG, "Auto shot queued target=$targetPackage dx=$dx dy=$dy interval=$intervalMs power=$powerPx diff=$difficulty")
         } else {
             status("QUEUE ${NativeExecutionStatus.nameOf(result)}")
             Log.w(TAG, "Auto shot rejected: ${NativeExecutionStatus.nameOf(result)}")

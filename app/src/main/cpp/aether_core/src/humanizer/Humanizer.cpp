@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdio>
 
 namespace aether {
 
@@ -129,7 +130,8 @@ static std::uint32_t delayFramesFromMs(
 Humanizer::Humanizer(
     HumanizerConfig config
 ) noexcept
-    : cfg(config) {}
+    : cfg(config),
+      persona_(makePersona(config.styleSeed)) {}
 
 std::uint64_t Humanizer::nextRandom(
     HumanizerState& state
@@ -446,6 +448,78 @@ PhysicsExperienceState Humanizer::applyTelemetry(
     out.layoutVersion = AETHER_PHYSICS_EXPERIENCE_STATE_VERSION;
 
     return out;
+}
+
+namespace {
+
+// Single global persona so the entire app plays with ONE consistent human
+// style (the heart of "leaves no trace"). gCadenceState supplies deterministic
+// RNG for inter-shot cadence sampling.
+Humanizer gHumanizer;
+HumanizerState gCadenceState;
+
+} // namespace
+
+HumanPersona aether::makePersona(std::uint64_t seed) noexcept {
+    HumanPersona p;
+    std::uint64_t x = seed ? seed : 0xA37B5F19D4C3B2A1ULL;
+
+    auto rnd = [&x]() -> double {
+        x ^= x >> 12U;
+        x ^= x << 25U;
+        x ^= x >> 27U;
+        const std::uint64_t v = x * 2685821657736338717ULL;
+        return (static_cast<double>(v >> 11U) * (1.0 / 9007199254740992.0)) * 2.0 - 1.0;
+    };
+
+    p.styleSeed = seed;
+    p.cadenceBias = rnd() * 0.6;
+    p.curvatureBias = clampDouble(0.12 + (rnd() * 0.5 + 0.5) * 0.22, 0.05, 0.45);
+    p.jitterBias = clampDouble(0.7 + (rnd() * 0.5 + 0.5) * 0.8, 0.4, 1.6);
+    p.slipBias = clampDouble(0.8 + (rnd() * 0.5 + 0.5) * 0.5, 0.5, 1.5);
+    p.windupBias = clampDouble(0.85 + (rnd() * 0.5 + 0.5) * 0.4, 0.6, 1.4);
+    return p;
+}
+
+double Humanizer::sampleCadenceMs(double difficulty) const noexcept {
+    const double d = clampDouble(difficulty, 0.0, 1.0);
+
+    // Harder shots => longer, more variable "thinking" before the strike.
+    const double base = 850.0 + d * 950.0;            // 850..1800 ms
+    const double u1 = (uniformSigned(gCadenceState) + 1.0) * 0.5;
+    const double u2 = (uniformSigned(gCadenceState) + 1.0) * 0.5;
+    const double spread = u1 * 0.6 + u2 * 0.4;        // 0..1, slightly skewed
+    const double factor = 0.70 + spread * 0.95;       // 0.70..1.65
+    const double cadence = base * factor * (1.0 + persona_.cadenceBias * 0.25);
+    return clampDouble(cadence, 550.0, 3200.0);
+}
+
+HumanMotionProfile Humanizer::motionProfile(double difficulty) const noexcept {
+    const double d = clampDouble(difficulty, 0.0, 1.0);
+
+    HumanMotionProfile p;
+    p.durationMs = 300.0 + d * 280.0;                 // 300..580 commit stroke
+    p.curvature = clampDouble(persona_.curvatureBias * (0.7 + d * 0.6), 0.04, 0.5);
+    p.jitterPx = 2.0 + persona_.jitterBias * 3.0;
+    p.windupScale = clampDouble(persona_.windupBias * 0.16, 0.06, 0.30);
+    p.followScale = clampDouble(persona_.windupBias * 0.10, 0.04, 0.20);
+    return p;
+}
+
+double aether::humanCadenceMs(double difficulty) noexcept {
+    return gHumanizer.sampleCadenceMs(difficulty);
+}
+
+std::string aether::humanMotionProfileJson(double difficulty) noexcept {
+    const HumanMotionProfile p = gHumanizer.motionProfile(difficulty);
+    char buf[192];
+    std::snprintf(
+        buf, sizeof(buf),
+        "{\"durationMs\":%.1f,\"curvature\":%.3f,\"jitterPx\":%.2f,"
+        "\"windupScale\":%.3f,\"followScale\":%.3f}",
+        p.durationMs, p.curvature, p.jitterPx, p.windupScale, p.followScale
+    );
+    return std::string(buf);
 }
 
 }

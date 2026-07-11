@@ -849,4 +849,26 @@ Java_com_aether_renderer_AetherIntegrationLoop_nativeLatestHudIntent(
     return static_cast<jint>(raw);
 }
 
+// --- AT167 human-like play: brain-owned cadence + kinematics policy ---
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_aether_renderer_AetherIntegrationLoop_nativeHumanCadenceMs(
+    JNIEnv*,
+    jclass,
+    jfloat difficulty
+) {
+    return static_cast<jlong>(
+        aether::humanCadenceMs(static_cast<double>(difficulty))
+    );
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_aether_renderer_AetherIntegrationLoop_nativeHumanMotionProfile(
+    JNIEnv* env,
+    jclass,
+    jfloat difficulty
+) {
+    const std::string json = aether::humanMotionProfileJson(static_cast<double>(difficulty));
+    return env->NewStringUTF(json.c_str());
+}
+
 #endif // AETHER_ENABLE_INTEGRATION_JNI

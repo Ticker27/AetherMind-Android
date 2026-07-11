@@ -9,13 +9,18 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.ViewConfiguration
+import com.aether.renderer.AetherIntegrationLoop
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlin.math.cos
+import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sin
+import kotlin.random.Random
 
 enum class CoordinateSpace {
     PIXELS,
@@ -54,11 +59,25 @@ object GestureCommandPacking {
     }
 }
 
+/**
+ * Human-like gesture actuation.
+ *
+ * A real player never draws a perfect straight line at constant speed. This
+ * executor turns the brain-owned [MotionProfile] into a CURVED, EASED,
+ * micro-jittered swipe split into three phases:
+ *   1) wind-up   — a small pull-back (like drawing the cue back),
+ *   2) commit    — the main curved strike to the target,
+ *   3) follow    — a short continue past the target (deceleration).
+ * The curved quadratic path + phased timing remove the "robot line" tell.
+ * Safety gates (PackageScopeGuard / EmergencyStop) live in the dispatcher and
+ * are NOT touched here.
+ */
 class AccessibilityGestureExecutor(
     private val config: GestureExecutionConfig = GestureExecutionConfig()
 ) : ScreenActionExecutor {
     companion object {
         private const val TAG = "AetherGestureExecutor"
+        private val motionRng = Random(0xC0FFEE)
     }
 
     override suspend fun execute(command: ActionCommand) {
@@ -99,34 +118,109 @@ class AccessibilityGestureExecutor(
         val commandDelta = GestureCommandPacking.unpackSwipeDelta(command.reserved)
         val deltaX = commandDelta?.first ?: config.swipeDeltaXPx
         val deltaY = commandDelta?.second ?: config.swipeDeltaYPx
-
-        val end = clampToDisplay(
+        val endRaw = clampToDisplay(
             service = service,
             x = start.x + deltaX,
             y = start.y + deltaY
         )
 
-        val path = Path().apply {
-            moveTo(start.x, start.y)
-            lineTo(end.x, end.y)
-        }
+        // Brain-owned human-like kinematics (C++ decides the style).
+        val len = hypot(deltaX.toDouble(), deltaY.toDouble())
+        val difficulty = (len / 900.0).coerceIn(0.0, 1.0)
+        val profile = parseMotionProfile(
+            runCatching {
+                AetherIntegrationLoop.nativeHumanMotionProfile(difficulty.toFloat())
+            }.getOrNull()
+        ) ?: MotionProfile()
 
-        val gesture = GestureDescription.Builder()
-            .addStroke(
-                GestureDescription.StrokeDescription(
-                    path,
-                    0L,
-                    config.swipeDurationMs
-                )
-            )
-            .build()
+        // Micro positional jitter on anchors: no two shots are pixel-identical.
+        val jx = (motionRng.nextFloat() * 2f - 1f) * profile.jitterPx.toFloat()
+        val jy = (motionRng.nextFloat() * 2f - 1f) * profile.jitterPx.toFloat()
+        val s = PointF(start.x + jx, start.y + jy)
+        val e = PointF(endRaw.x + jx * 0.4f, endRaw.y + jy * 0.4f)
 
+        val gesture = buildHumanStroke(s, e, profile)
         dispatchOrThrow(service, gesture)
 
         Log.d(
             TAG,
-            "SWIPE dispatched start=(${start.x},${start.y}) end=(${end.x},${end.y}) duration=${config.swipeDurationMs}"
+            "SWIPE(human) start=(${s.x},${s.y}) end=(${e.x},${e.y}) " +
+                "dur=${profile.durationMs} curve=${profile.curvature}"
         )
+    }
+
+    private fun buildHumanStroke(
+        start: PointF,
+        end: PointF,
+        p: MotionProfile
+    ): GestureDescription {
+        val dx = end.x - start.x
+        val dy = end.y - start.y
+        val len = hypot(dx.toDouble(), dy.toDouble()).toFloat().coerceAtLeast(1f)
+
+        // Perpendicular unit vector for the curved bow.
+        val px = -dy / len
+        val py = dx / len
+        val bow = (p.curvature * len) * (if (motionRng.nextBoolean()) 1f else -1f)
+        // Quadratic control point: midpoint bowed perpendicular => curved path.
+        val ctrl = PointF(
+            (start.x + end.x) / 2f + px * bow,
+            (start.y + end.y) / 2f + py * bow
+        )
+
+        val wuLen = (len * p.windupScale.toFloat()).coerceAtLeast(6f)
+        val windup = PointF(start.x - dx / len * wuLen, start.y - dy / len * wuLen)
+        val ftLen = (len * p.followScale.toFloat()).coerceAtLeast(4f)
+        val follow = PointF(end.x + dx / len * ftLen, end.y + dy / len * ftLen)
+
+        val d1 = (p.durationMs * 0.35).toLong().coerceAtLeast(60L)   // wind-up
+        val d2 = p.durationMs.toLong().coerceAtLeast(140L)           // commit
+        val d3 = (p.durationMs * 0.25).toLong().coerceAtLeast(40L)   // follow-through
+
+        val builder = GestureDescription.Builder()
+        builder.addStroke(quadStroke(windup, start, ctrl, 0L, d1))
+        builder.addStroke(quadStroke(start, end, ctrl, d1, d2))
+        builder.addStroke(quadStroke(end, follow, ctrl, d1 + d2, d3))
+        return builder.build()
+    }
+
+    private fun quadStroke(
+        a: PointF,
+        b: PointF,
+        ctrl: PointF,
+        startTimeMs: Long,
+        durationMs: Long
+    ): GestureDescription.StrokeDescription {
+        val path = Path().apply {
+            moveTo(a.x, a.y)
+            quadTo(ctrl.x, ctrl.y, b.x, b.y)
+        }
+        return GestureDescription.StrokeDescription(path, startTimeMs, durationMs)
+    }
+
+    private data class MotionProfile(
+        val durationMs: Double = 380.0,
+        val curvature: Double = 0.16,
+        val jitterPx: Double = 3.0,
+        val windupScale: Double = 0.18,
+        val followScale: Double = 0.10
+    )
+
+    private fun parseMotionProfile(json: String?): MotionProfile? {
+        if (json.isNullOrBlank()) return null
+        return runCatching {
+            fun num(key: String): Double {
+                val i = json.indexOf("\"$key\"")
+                if (i < 0) return 0.0
+                val c = json.indexOf(':', i) + 1
+                val e = json.indexOfAny(charArrayOf(',', '}'), c)
+                return json.substring(c, e).toDouble()
+            }
+            MotionProfile(
+                num("durationMs"), num("curvature"),
+                num("jitterPx"), num("windupScale"), num("followScale")
+            )
+        }.getOrNull()
     }
 
     private fun toScreenPoint(

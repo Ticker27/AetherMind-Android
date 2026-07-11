@@ -60,6 +60,10 @@ object AetherIntegrationLoop {
 
     external fun nativeAutoPlaySwipePowerPx(): Float
 
+    // AT167: brain-owned human-like cadence + gesture kinematics policy.
+    external fun nativeHumanCadenceMs(difficulty: Float): Long
+    external fun nativeHumanMotionProfile(difficulty: Float): String
+
     external fun nativeSetAccessibilitySnapshot(
         sequence: Long,
         packageName: String,
