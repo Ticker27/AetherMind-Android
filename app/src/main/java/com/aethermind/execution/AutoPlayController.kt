@@ -138,7 +138,7 @@ class AutoPlayController(
             // Sample NEXT gap from the brain (harder shots => longer think).
             nextDelayMs = runCatching {
                 AetherIntegrationLoop.nativeHumanCadenceMs(difficulty)
-            }.getOrDefault(nativeIntervalMs()).coerceAtLeast(500)
+            }.getOrDefault(nativeIntervalMs().toLong()).coerceAtLeast(500L)
             status("QUEUED ${targetPackage.substringAfterLast('.')}")
             Log.d(TAG, "Auto shot queued target=$targetPackage dx=$dx dy=$dy interval=$intervalMs power=$powerPx diff=$difficulty")
         } else {

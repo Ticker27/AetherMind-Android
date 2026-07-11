@@ -161,7 +161,7 @@ class AccessibilityGestureExecutor(
         // Perpendicular unit vector for the curved bow.
         val px = -dy / len
         val py = dx / len
-        val bow = (p.curvature * len) * (if (motionRng.nextBoolean()) 1f else -1f)
+        val bow = ((p.curvature * len) * (if (motionRng.nextBoolean()) 1f else -1f)).toFloat()
         // Quadratic control point: midpoint bowed perpendicular => curved path.
         val ctrl = PointF(
             (start.x + end.x) / 2f + px * bow,
