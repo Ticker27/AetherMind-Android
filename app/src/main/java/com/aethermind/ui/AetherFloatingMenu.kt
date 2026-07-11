@@ -67,7 +67,9 @@ fun AetherFloatingMenuRoot(
     onReset: () -> Unit,
     onOpenPermissions: () -> Unit,
     onToggleVision: () -> Unit,
-    onToggleHud: () -> Unit
+    onToggleHud: () -> Unit,
+    onToggleAim: () -> Unit = {},
+    onToggleDebug: () -> Unit = {}
 ) {
     val expanded = remember { mutableStateOf(false) }
 
@@ -84,7 +86,9 @@ fun AetherFloatingMenuRoot(
                 onReset = onReset,
                 onOpenPermissions = onOpenPermissions,
                 onToggleVision = onToggleVision,
-                onToggleHud = onToggleHud
+                onToggleHud = onToggleHud,
+                onToggleAim = onToggleAim,
+                onToggleDebug = onToggleDebug
             )
         } else {
             MiniAetherBubble(
@@ -158,7 +162,9 @@ private fun ExpandedAetherMenu(
     onReset: () -> Unit,
     onOpenPermissions: () -> Unit,
     onToggleVision: () -> Unit,
-    onToggleHud: () -> Unit
+    onToggleHud: () -> Unit,
+    onToggleAim: () -> Unit = {},
+    onToggleDebug: () -> Unit = {}
 ) {
     val width by animateDpAsState(
         targetValue = 320.dp,
@@ -200,7 +206,9 @@ private fun ExpandedAetherMenu(
         QuickMenuGrid(
             onToggleHud = onToggleHud,
             onToggleVision = onToggleVision,
-            onOpenPermissions = onOpenPermissions
+            onOpenPermissions = onOpenPermissions,
+            onToggleAim = onToggleAim,
+            onToggleDebug = onToggleDebug
         )
 
         Spacer(modifier = Modifier.height(14.dp))
@@ -347,7 +355,9 @@ private fun StatusRow(
 private fun QuickMenuGrid(
     onToggleHud: () -> Unit,
     onToggleVision: () -> Unit,
-    onOpenPermissions: () -> Unit
+    onOpenPermissions: () -> Unit,
+    onToggleAim: () -> Unit = {},
+    onToggleDebug: () -> Unit = {}
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -370,7 +380,7 @@ private fun QuickMenuGrid(
             MenuChip(
                 text = "Aim",
                 modifier = Modifier.weight(1f),
-                onClick = {}
+                onClick = onToggleAim
             )
         }
 
@@ -380,7 +390,7 @@ private fun QuickMenuGrid(
             MenuChip(
                 text = "Debug",
                 modifier = Modifier.weight(1f),
-                onClick = {}
+                onClick = onToggleDebug
             )
 
             MenuChip(

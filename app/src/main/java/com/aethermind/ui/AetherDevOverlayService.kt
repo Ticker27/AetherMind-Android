@@ -3,50 +3,40 @@ package com.aethermind.ui
 import android.content.Intent
 import android.graphics.PixelFormat
 import android.os.IBinder
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.dp
+import androidx.compose.material3.MaterialTheme
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.setViewTreeLifecycleOwner
-import com.aethermind.execution.AetherRuntime
-import com.aethermind.execution.VisionShotIntegration
 
 /**
  * Aether Developer Overlay Service
- * 
- * Stub-Driven Development: ใช้ Mock Data ทดสอบ UI ก่อน
- * จากนั้นค่อยเปลี่ยนเป็นข้อมูลจริงจาก VisionProcessor (C++)
- * 
- * Key Features:
- * - Canvas Overlay ทับเกม 8 Ball Pool
- * - CoordinateMapper สำหรับแปลงพิกัด Engine → Screen
- * - Debug Menu สำหรับเปิด/ปิด ฟีเจอร์
- * - Mock Ball Positions สำหรับทดสอบ
+ *
+ * Pool Game Overlay จากคลิปอ้างอิง - 2 Windows Overlay System:
+ *
+ * AetherDevOverlayService
+ * ├── Canvas Overlay Window (MATCH_PARENT, FLAG_NOT_TOUCHABLE)
+ * │   ├── วาดเส้น aim / trajectory (AetherAimCanvas)
+ * │   ├── วาดวงกลม cue marker
+ * │   ├── วาด pocket target / collision point
+ * │   └── ไม่รับ touch เพื่อไม่บังเกม
+ * │
+ * └── Floating Menu Window (WRAP_CONTENT, รับ touch)
+ *     ├── Mini Bubble: AE 91%
+ *     ├── Expanded Menu: Vision / HUD / Aim / Debug
+ *     └── รับ touch เฉพาะตัวเมนู
+ *
+ * Shared state (PoolOverlayState) ใช้ MutableState ร่วมกันระหว่าง 2 ComposeView
+ * ผ่าน global snapshot ของ Compose → กดปุ่มในเมนูจะอัปเดต Canvas ทันที
  */
 class AetherDevOverlayService : LifecycleService() {
 
     private var windowManager: android.view.WindowManager? = null
     private var canvasView: ComposeView? = null
     private var menuView: ComposeView? = null
+
+    // Shared UI state - observable across both ComposeView windows (global snapshot)
+    private val overlayState = PoolOverlayState()
 
     // ========================================================================
     // LIFECYCLE
@@ -72,7 +62,15 @@ class AetherDevOverlayService : LifecycleService() {
         canvasView = ComposeView(this).apply {
             setViewTreeLifecycleOwner(this@AetherDevOverlayService)
             setContent {
-                AetherCanvasOverlay()
+                AetherAimCanvas(
+                    trajectory = overlayState.trajectory.value,
+                    showCanvasOverlay = overlayState.showCanvasOverlay.value,
+                    showAimGuide = overlayState.showAimGuide.value,
+                    showReboundLines = overlayState.showReboundLines.value,
+                    showCollisionMarkers = overlayState.showCollisionMarkers.value,
+                    showBallMarkers = overlayState.showBallMarkers.value,
+                    showDebug = overlayState.showDebug.value
+                )
             }
         }
 
@@ -89,12 +87,12 @@ class AetherDevOverlayService : LifecycleService() {
                         state = FloatingMenuState(
                             engineStatus = EngineStatus.Ready,
                             visionActive = true,
-                            overlayVisible = true,
+                            overlayVisible = overlayState.showCanvasOverlay.value,
                             trajectoryReady = true,
                             executionLocked = true,
                             fps = 30,
-                            ballCount = 8,
-                            confidence = 91,
+                            ballCount = overlayState.ballCount.value,
+                            confidence = overlayState.confidence.value,
                             targetLabel = "Yellow Ball",
                             modeLabel = "PROPOSE ONLY"
                         ),
@@ -102,19 +100,31 @@ class AetherDevOverlayService : LifecycleService() {
                             stopSelf()
                         },
                         onHideHud = {
-                            // TODO: hide canvas overlay
+                            // HUD = toggle canvas overlay
+                            overlayState.showCanvasOverlay.value = !overlayState.showCanvasOverlay.value
                         },
                         onReset = {
-                            // TODO: reset runtime state
+                            // Reset = reset mock trajectory
+                            overlayState.resetTrajectory()
                         },
                         onOpenPermissions = {
                             // TODO: open settings screen
                         },
                         onToggleVision = {
-                            // TODO: enable/disable vision layer
+                            // Vision = toggle mock ball markers
+                            overlayState.showBallMarkers.value = !overlayState.showBallMarkers.value
                         },
                         onToggleHud = {
-                            // TODO: show/hide HUD layer
+                            // HUD = toggle canvas overlay
+                            overlayState.showCanvasOverlay.value = !overlayState.showCanvasOverlay.value
+                        },
+                        onToggleAim = {
+                            // Aim = toggle aim guide
+                            overlayState.showAimGuide.value = !overlayState.showAimGuide.value
+                        },
+                        onToggleDebug = {
+                            // Debug = toggle debug labels
+                            overlayState.showDebug.value = !overlayState.showDebug.value
                         }
                     )
                 }
@@ -138,177 +148,23 @@ class AetherDevOverlayService : LifecycleService() {
     }
 
     // ========================================================================
-    // MOCK DATA - Ball Positions (Normalized 0.0-1.0)
+    // SHARED OVERLAY STATE
     // ========================================================================
 
-    // ใช้ BallPosition จาก CoordinateMapper.kt
-    private val mockBalls = listOf(
-        BallPosition(id = 0, normX = 0.5f, normY = 0.7f, isCue = true),    // ลูกขาว (Cue ball)
-        BallPosition(id = 9, normX = 0.5f, normY = 0.4f, isCue = false)   // ลูกเป้าหมาย (Target ball)
-    )
-    
-    // เส้นวิถีจาก Mock Data
-    private val mockTrajectory = TrajectoryLine.fromCueToTargetExtended(
-        cue = mockBalls.first { it.isCue },
-        target = mockBalls.first { !it.isCue },
-        extensionFactor = 0.5f
-    )
+    class PoolOverlayState {
+        val showCanvasOverlay = mutableStateOf(true)
+        val showAimGuide = mutableStateOf(true)
+        val showReboundLines = mutableStateOf(true)
+        val showCollisionMarkers = mutableStateOf(true)
+        val showBallMarkers = mutableStateOf(true)
+        val showDebug = mutableStateOf(false)
+        val showFloatingMenu = mutableStateOf(true)
+        val confidence = mutableStateOf(91)
+        val ballCount = mutableStateOf(8)
+        val trajectory = mutableStateOf(buildMockTrajectory())
 
-    // ========================================================================
-    // COMPOSE UI - Aether Developer Overlay
-    // ========================================================================
-
-    // AUTO PLAY State
-    private var visionIntegration: VisionShotIntegration? by mutableStateOf(null)
-    private var isAutoPlayRunning by mutableStateOf(false)
-    
-    // Target package for auto play
-    private val targetPackage = "com.miniclip.eightballpool"
-
-    @Composable
-    fun AetherCanvasOverlay() {
-        // State สำหรับควบคุมการวาด Canvas overlay
-        var showAimLine by remember { mutableStateOf(true) }
-        var showBallMarkers by remember { mutableStateOf(true) }
-        var showGhostBall by remember { mutableStateOf(true) }
-        var showPowerBar by remember { mutableStateOf(false) }
-
-        Box(modifier = Modifier.fillMaxSize()) {
-            
-            // =================================================================
-            // 1. Canvas - วาดเส้นและตัวบอลทับเกม (ใช้ CoordinateMapper)
-            // =================================================================
-            if (showAimLine || showBallMarkers || showGhostBall || showPowerBar) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    // ขนาดหน้าจอปัจจุบัน (จาก Canvas)
-                    val currentSize = IntSize(size.width.toInt(), size.height.toInt())
-                    
-                    // คำนวณ scale factor สำหรับ ball radius
-                    val baseRadius = CoordinateMapper.scaleRadius(24f, currentSize)
-                    val ghostRadius = CoordinateMapper.scaleRadius(28f, currentSize)
-                    
-                    // --- วาดตัวบอล (Ball Markers) ---
-                    if (showBallMarkers) {
-                        mockBalls.forEach { ball ->
-                            // แปลงพิกัด Normalized → Screen Pixel
-                            val screenPos = ball.toScreenOffset(currentSize)
-                            
-                            // วาดวงกลม (Stroke ไม่ต้อง Fill)
-                            drawCircle(
-                                color = if (ball.isCue) Color.White else Color.Yellow,
-                                radius = baseRadius,
-                                center = screenPos,
-                                style = Stroke(width = 4f)
-                            )
-                            
-                            // วาดจุดเล็งในวงกลม
-                            drawCircle(
-                                color = if (ball.isCue) Color.White.copy(alpha = 0.5f) 
-                                        else Color.Yellow.copy(alpha = 0.5f),
-                                radius = 6f,
-                                center = screenPos
-                            )
-                        }
-                    }
-
-                    // --- วาดเส้นเล็ง (Aim Line) ---
-                    if (showAimLine) {
-                        // ใช้ TrajectoryLine.toScreenOffsets() สำหรับแปลงพิกัด
-                        val (startPx, endPx) = mockTrajectory.toScreenOffsets(currentSize)
-                        
-                        // เส้นหลัก (สีฟ้าอมเขียว)
-                        drawLine(
-                            color = Color.Cyan.copy(alpha = 0.9f),
-                            start = startPx,
-                            end = endPx,
-                            strokeWidth = 6f,
-                            cap = StrokeCap.Round
-                        )
-                        
-                        // เส้นรอง (สีขาวโปร่ง - ขยายต่อไปอีก)
-                        val extendedTraj = CoordinateMapper.extendLine(
-                            mockTrajectory.startX, mockTrajectory.startY,
-                            mockTrajectory.endX, mockTrajectory.endY,
-                            0.3f  // ยาวขึ้น 30%
-                        )
-                        val extendedEnd = CoordinateMapper.mapToScreen(
-                            extendedTraj.first, extendedTraj.second, currentSize
-                        )
-                        drawLine(
-                            color = Color.White.copy(alpha = 0.3f),
-                            start = startPx,
-                            end = extendedEnd,
-                            strokeWidth = 2f,
-                            cap = StrokeCap.Round
-                        )
-                    }
-
-                    // --- วาด Ghost Ball (ตำแหน่งที่ลูกขาวจะไปชน) ---
-                    if (showGhostBall) {
-                        val cue = mockBalls.first { it.isCue }
-                        val target = mockBalls.first { !it.isCue }
-                        
-                        // คำนวณตำแหน่ง Ghost Ball (ขยายจาก target ไปอีกนิดหน่อย)
-                        val ghostTraj = CoordinateMapper.extendLine(
-                            cue.normX, cue.normY,
-                            target.normX, target.normY,
-                            0.15f  // ขยาย 15% ผ่าน target
-                        )
-                        val ghostPos = CoordinateMapper.mapToScreen(
-                            ghostTraj.first, ghostTraj.second, currentSize
-                        )
-                        
-                        // วาด Ghost Ball (วงกลมประ)
-                        drawCircle(
-                            color = Color.Magenta.copy(alpha = 0.7f),
-                            radius = ghostRadius,
-                            center = ghostPos,
-                            style = Stroke(width = 3f)
-                        )
-                        
-                        // วาดเส้นประระหว่าง target กับ ghost
-                        val targetPos = target.toScreenOffset(currentSize)
-                        drawLine(
-                            color = Color.Magenta.copy(alpha = 0.4f),
-                            start = targetPos,
-                            end = ghostPos,
-                            strokeWidth = 3f,
-                            cap = StrokeCap.Round
-                        )
-                    }
-
-                    // --- วาด Power Bar (Mock) ---
-                    if (showPowerBar) {
-                        val power = 0.7f // Mock power level
-                        val barWidth = 240f
-                        val barHeight = 24f
-                        val barX = size.width / 2 - barWidth / 2
-                        val barY = size.height * 0.85f
-                        
-                        // Background bar
-                        drawRoundRect(
-                            color = Color.Gray.copy(alpha = 0.6f),
-                            topLeft = Offset(barX, barY),
-                            size = Size(barWidth, barHeight),
-                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(12f, 12f)
-                        )
-                        
-                        // Power fill
-                        val fillColor = when {
-                            power > 0.8f -> Color.Red
-                            power > 0.5f -> Color.Yellow
-                            else -> Color.Green
-                        }
-                        drawRoundRect(
-                            color = fillColor,
-                            topLeft = Offset(barX, barY),
-                            size = Size(barWidth * power, barHeight),
-                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(12f, 12f)
-                        )
-                    }
-                }
-            }
-
+        fun resetTrajectory() {
+            trajectory.value = buildMockTrajectory()
         }
     }
 
